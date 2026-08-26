@@ -33,8 +33,29 @@ export interface Entry {
   shadows?: string[];
 }
 
+/**
+ * Facts about the install that are not entries, but change what the entries mean.
+ *
+ * `projectTrusted` is the sharp one: pi loads `.pi/` resources and ancestor `.agents/skills`
+ * only for a trusted project, and does not even read project settings otherwise. A panel that
+ * ignores it reports resources that are not loading.
+ */
+export interface Environment {
+  agentDir: string;
+  cwd: string;
+  projectTrusted: boolean;
+  /**
+   * False when the project has nothing that would need trust in the first place, in which case
+   * `projectTrusted` is true for want of a question rather than by decision.
+   */
+  projectNeedsTrust: boolean;
+  /** The package supplying MCP support, if one is installed. pi itself has none. */
+  mcpProvider: string | null;
+}
+
 export interface Inventory {
   entries: Entry[];
+  environment: Environment;
   /** Anything that could not be read. Shown to the user rather than swallowed. */
   errors: string[];
 }

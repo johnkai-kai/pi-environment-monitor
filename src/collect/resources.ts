@@ -1,11 +1,14 @@
 import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   DefaultPackageManager,
+  hasTrustRequiringProjectResources,
+  ProjectTrustStore,
   SettingsManager,
   type ResolvedPaths,
   type ResolvedResource,
 } from "@earendil-works/pi-coding-agent";
-import type { Entry, Inventory, Kind, Scope } from "../inventory.ts";
+import type { Entry, Environment, Inventory, Kind, Scope } from "../inventory.ts";
 import { compareEntries } from "../inventory.ts";
 import { FS_READERS } from "./fs-readers.ts";
 import { scanMcp } from "./mcp.ts";
@@ -67,6 +70,47 @@ export interface CollectOptions {
   readers?: Readers;
 }
 
+/**
+ * pi's own rule, copied from its startup path rather than guessed: a project with nothing that
+ * needs trust is trusted for want of a question; otherwise the stored decision governs.
+ *
+ * Getting this wrong is not cosmetic. `SettingsManager.create()` defaults `projectTrusted` to
+ * true, so a panel that omits it reports `.pi/` skills and extensions as live in a project where
+ * pi is loading none of them.
+ */
+function resolveTrust(cwd: string, agentDir: string): { trusted: boolean; needsTrust: boolean } {
+  const needsTrust = safeCall(() => hasTrustRequiringProjectResources(cwd), false);
+  if (!needsTrust) return { trusted: true, needsTrust: false };
+  const decision = safeCall<unknown>(() => new ProjectTrustStore(agentDir).get(cwd), undefined);
+  return { trusted: decision === true, needsTrust: true };
+}
+
+function safeCall<T>(fn: () => T, fallback: T): T {
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Which installed package supplies MCP support. pi has none of its own, so without one of these
+ * an mcp.json on disk is read by nobody.
+ */
+function findMcpProvider(sources: readonly string[], readers: Readers, roots: readonly string[]): string | null {
+  for (const [index, root] of roots.entries()) {
+    const declaresMcp = safeCall(() => {
+      const manifest = readers.readJson(join(root, "package.json"));
+      const pi = manifest !== null && typeof manifest === "object" ? (manifest as Record<string, unknown>).pi : undefined;
+      return pi !== null && typeof pi === "object" && "mcp" in (pi as Record<string, unknown>);
+    }, false);
+    if (declaresMcp) return sources[index] ?? root;
+  }
+  // A package can implement MCP without declaring `pi.mcp` — the adapter this was developed
+  // against does exactly that, shipping only an extension. Naming is the remaining signal.
+  return sources.find((source) => /mcp/i.test(source)) ?? null;
+}
+
 export async function collectInventory(options: CollectOptions): Promise<Inventory> {
   const { cwd, agentDir } = options;
   const home = options.home ?? homedir();
@@ -74,14 +118,19 @@ export async function collectInventory(options: CollectOptions): Promise<Invento
   const entries: Entry[] = [];
   const errors: string[] = [];
 
-  const settingsManager = SettingsManager.create(cwd, agentDir);
+  const trust = resolveTrust(cwd, agentDir);
+  const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: trust.trusted });
   const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
 
   const packageRoots: string[] = [];
+  const packageSources: string[] = [];
   try {
     for (const pkg of packageManager.listConfiguredPackages()) {
       const path = pkg.installedPath;
-      if (path !== undefined && path !== "") packageRoots.push(path);
+      if (path !== undefined && path !== "") {
+        packageRoots.push(path);
+        packageSources.push(pkg.source);
+      }
       entries.push({
         kind: "package",
         name: pkg.source,
@@ -115,5 +164,14 @@ export async function collectInventory(options: CollectOptions): Promise<Invento
   }
 
   entries.sort(compareEntries);
-  return { entries, errors };
+
+  const environment: Environment = {
+    agentDir,
+    cwd,
+    projectTrusted: trust.trusted,
+    projectNeedsTrust: trust.needsTrust,
+    mcpProvider: safeCall(() => findMcpProvider(packageSources, readers, packageRoots), null),
+  };
+
+  return { entries, environment, errors };
 }
