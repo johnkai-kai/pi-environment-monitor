@@ -2,16 +2,21 @@ import { basename, join } from "node:path";
 import type { Entry, Scope } from "../inventory.ts";
 import { field, safe, strings, type Readers } from "./readers.ts";
 
-// MCP servers are the one kind pi does not resolve for us.
+// MCP servers are the one kind pi does not resolve for us — because pi does not have them.
 //
 // Skills, extensions, prompts and themes all come back from pi's own PackageManager already
-// resolved, with a path and an enabled flag (see resources.ts). MCP has no equivalent: pi
-// reads its servers from a fixed list of config files and from other tools' configs, and
-// exposes none of that to an extension. So this file is the one place where discovery rules
-// are re-implemented rather than borrowed, and the rules are copied from pi's own loader.
+// resolved, with a path and an enabled flag (see resources.ts). MCP has no equivalent, and the
+// reason is stronger than a missing API: pi has no MCP support at all. The whole monorepo — ten
+// packages — contains no MCP code. It arrives through a third-party extension, pi-mcp-adapter,
+// which owns the file locations, the format and the read order used below.
 //
-// The ported logic began life in pi-statusline-hud's collect/env.ts, which computes the same
-// sets and then returns only their size.
+// So this is the one place where discovery rules are re-implemented rather than borrowed, and
+// the rules being mirrored belong to that adapter, which means they can change when it does.
+// docs/pi-api-findings.md has the evidence and the better long-term option.
+//
+// The logic is ported from pi-statusline-hud's collect/env.ts, which computes the same sets and
+// then returns only their size. Its comments attribute these rules to pi; that attribution is
+// wrong and is not repeated here.
 
 const PKG_SEPARATOR = "__";
 const HOST_DISCOVERY_ON = "on";
@@ -107,9 +112,9 @@ const HOSTS: Record<string, (ctx: HostContext) => HostResult | null> = {
   windsurf: (ctx) => jsonHost(ctx, join(ctx.home, ".windsurf", "mcp.json"), MCP_KEYS),
 };
 
-// The six config files pi reads, in its own source order, each with the scope it belongs to.
+// The six config files the adapter reads, in its order, each with the scope it belongs to.
 // `.agents` is shared with other agent tools rather than owned by pi, which is exactly why a
-// server can appear that the user never put in a pi config at all.
+// server can appear that the user never put in a pi-specific config at all.
 function configFiles(agentDir: string, cwd: string, home: string): Array<[string, Scope]> {
   return [
     [join(home, ".config", "mcp", "mcp.json"), "user"],
@@ -190,7 +195,7 @@ export function scanMcp(input: McpScanInput): Entry[] {
     if (value !== undefined) discovery = value;
   }
 
-  // pi merges the config files in order, later file wins. Reporting the first definition found
+  // The adapter merges the config files in order, later file wins. Reporting the first one found
   // would point at the file whose value is being overridden — the single most misleading thing
   // this panel could say, since editing it changes nothing.
   for (const file of files) {

@@ -60,13 +60,34 @@ install.
 
 ## What pi does not expose
 
-**MCP servers.** There is no MCP module in the published surface, nothing on
-`ExtensionAPI` or `ExtensionContext`, and no entry in `ResolvedPaths`. Servers
-are read from a fixed list of config files and, optionally, from other agent
-tools' configs. So MCP is the one kind whose discovery rules are re-implemented
-here, in `src/collect/mcp.ts`, ported from `pi-statusline-hud`'s version.
+**MCP servers — and pi does not have them at all.**
 
-The files pi reads, in its own order:
+The first pass here said pi exposes no MCP *API*. Reading the source showed
+something stronger: pi has no MCP *support*. Across the whole monorepo — ten
+packages, 240+ TypeScript files — `find -ipath '*mcp*'` returns nothing, and
+grepping for `mcpServers` or `hostConfigDiscovery` in `packages/coding-agent`
+returns nothing. `ResolvedPaths` has four kinds, and MCP is not one of them.
+
+MCP arrives through a third-party package. On the machine this was developed
+against that is [`pi-mcp-adapter`](https://github.com/nicobailon/pi-mcp-adapter),
+an ordinary pi extension. So `~/.pi/agent/mcp.json` — its location, its format,
+the order the files are read in — is that adapter's convention, not pi's. A pi
+user without the adapter has no MCP at all, and the file does nothing.
+
+This matters for anything built on it:
+
+- The rules in `src/collect/mcp.ts` mirror a **third-party package**, so they
+  can change when that package does. They are maintenance debt in a way the
+  rest of this codebase deliberately is not.
+- The adapter writes its own resolved list to `<agentDir>/mcp-cache.json`
+  (`{version, servers: {...}}`). Asking it beats copying it, the same way asking
+  pi's `PackageManager` beats copying pi's rules — with the caveat that a cache
+  can be stale and does not record which file each server came from.
+- `pi-statusline-hud`'s `collect/env.ts` calls these "pi's own rule" and "pi's
+  source order" in its comments. That is wrong, and the ported copy here should
+  not repeat it.
+
+The files the adapter reads, in its order:
 
 | Path | Scope |
 | --- | --- |
@@ -86,7 +107,7 @@ Beyond the files, a config's `imports` array pulls in another tool's servers
 `settings.hostConfigDiscovery: "on"` pulls in every one of them without being
 asked.
 
-**Later file wins.** pi merges the configs in order, so a name defined twice is
+**Later file wins.** The adapter merges the configs in order, so a name defined twice is
 live in the *last* file. Reporting the first match points at the definition
 being overridden — the most misleading thing this panel could say, since editing
 it changes nothing. The scan reports the winner and counts what it overrode.
