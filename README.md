@@ -48,7 +48,13 @@ the other one looks like it does nothing.
 ## Install
 
 ```sh
-pi package add npm:pi-environment-monitor
+pi install git:github.com/johnkai-kai/pi-environment-monitor
+```
+
+To try it for one session without installing anything:
+
+```sh
+pi -e git:github.com/johnkai-kai/pi-environment-monitor
 ```
 
 ## How it works
