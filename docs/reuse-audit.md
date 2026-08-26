@@ -11,16 +11,19 @@ Verdicts:
   or a colour.
 - **ignore** — solves a problem this package does not have.
 
-Provisional where marked: `docs/investigation.md` has not landed yet. If pi turns
-out to expose the resolved skill / extension / MCP lists through an extension API,
-the whole `collect/env.ts` line of work collapses into a thin adapter and several
-"extend" verdicts below become "ignore".
+**Settled after the first version was built.** The open architecture question — does
+pi hand over the resolved lists — turned out to be yes for four of the six kinds.
+`PackageManager.resolve()` returns skills, extensions, prompts and themes already
+resolved, with path, `enabled` and scope, so far less of the reference package was
+needed than the original verdicts assumed. Findings are in
+[pi-api-findings.md](pi-api-findings.md); the verdicts below say what actually
+happened.
 
 ## The core
 
 | File | Verdict | Reasoning |
 | --- | --- | --- |
-| `collect/env.ts` | **extend** (provisional) | This is the reason the reference repo matters. It already reverse-engineers pi's discovery rules for all five kinds across all scopes — then throws the answer away by returning `.size`. The job here is to make the internal `Set<string>` the return value: names, absolute paths, scope, and disabled state instead of a count. Add themes and prompt templates, which the HUD never counted. |
+| `collect/env.ts` | **partly used** | Expected to be the centrepiece; supplied about a sixth of the work. Its skill / extension / package scanning is superseded by pi's own `PackageManager.resolve()`, which returns what the HUD had to reconstruct — so none of it was copied. Its **MCP** half is the exception and was ported into `src/collect/mcp.ts`, because pi exposes no MCP API and those rules still have to live somewhere. One behaviour changed on the way: the HUD collects names into a `Set`, where order does not matter, but reporting a *path* forces the question of which definition wins, and pi's answer is the last file, not the first. |
 | `collect/fs-readers.ts` | **copy-as-is** | The `EnvReaders` implementation behind `scanEnv`, including the symlink-aware `listDir`. It moves with `env.ts` unchanged; the injection seam is what makes the scanner testable against a virtual filesystem instead of a real install. |
 | `sanitize.ts` | **copy-as-is** | Mandatory, and more so here than in the HUD. This panel prints names and paths straight out of third-party packages and the filesystem; unsanitised, an OSC or CSI sequence in a package name owns the terminal's control channel. Zero-dependency, self-contained, no HUD assumptions. |
 
