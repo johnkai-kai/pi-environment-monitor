@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      # One platform failing must not hide another platform's result.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      # peerDependencies are marked optional, so npm does not install them — but the tests and
+      # the type check both need them. Install before running anything, or every file that
+      # imports pi fails with ERR_MODULE_NOT_FOUND in CI while staying green locally.
+      - name: Install peer deps
+        run: npm install --no-save typescript @types/node @earendil-works/pi-coding-agent @earendil-works/pi-tui
+      - name: Unit tests
+        run: npm test
+      - name: Secret scan
+        run: node scripts/scan-secrets.mjs
+      - name: Type check
+        run: npx tsc --noEmit
