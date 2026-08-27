@@ -1,6 +1,6 @@
 {
   "name": "pi-environment-monitor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "On-demand panel listing every skill, extension, MCP server, package, theme and prompt template the pi coding agent has loaded, with its real path on disk.",
   "type": "module",
   "license": "MIT",
