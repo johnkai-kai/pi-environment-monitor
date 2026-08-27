@@ -9,6 +9,7 @@ import { matchesKey } from "@earendil-works/pi-tui";
 import { collectInventory } from "./collect/resources.ts";
 import { debugLogPath, writeDebug } from "./debug.ts";
 import type { Entry, Inventory } from "./inventory.ts";
+import { cursorPaint, type Focus } from "./highlight.ts";
 import { moveSelection, renderList } from "./list-view.ts";
 import { overviewLines } from "./overview.ts";
 import {
@@ -16,6 +17,7 @@ import {
   detailLines,
   errorLines,
   filterEntries,
+  DETAIL_LINES,
   keyHint,
   searchBox,
   selectionLine,
@@ -27,6 +29,12 @@ import { buildTabs, entriesForTab, renderTabBar, stepTab, tabShowsKindColumn, ty
 
 const COMMANDS = ["pi-env", "pi-environment-monitor"] as const;
 const VISIBLE_ROWS = 12;
+// Every view pads to this, so the panel never changes height — not when the cursor moves, not
+// when a filter narrows the list, and not when switching between the Overview page and a tab.
+// It is set by the tallest view, which is Overview; the list layout below comes to less.
+//   tab strip, blank, search, blank, rows, counter, rule, selection, detail, blank, hint
+const LIST_HEIGHT = 2 + 2 + VISIBLE_ROWS + 1 + 1 + 1 + DETAIL_LINES + 2;
+const PANEL_HEIGHT = Math.max(LIST_HEIGHT, 28);
 const PRINTABLE = /^[\x20-\x7e]$/;
 const RULE = "─";
 
@@ -53,6 +61,14 @@ export class Panel {
   activeIndex = 0;
   filter = "";
   selectedIndex = 0;
+  /**
+   * Which half of the panel holds the cursor.
+   *
+   * One cursor moves through the whole panel rather than two independent modes — left and right
+   * along the tabs, down into the list, up out of it again. The block of colour is always on the
+   * thing the next keypress acts on, so "where am I" never needs working out.
+   */
+  focus: Focus = "tabs";
   /** The package being looked inside, or null at the top level. */
   drilledInto: Entry | null = null;
 
@@ -116,6 +132,7 @@ export class Panel {
       this.drilledInto = entry;
       this.filter = "";
       this.selectedIndex = 0;
+      this.focus = "list";
       return;
     }
     this.onCopy(entry.path);
@@ -139,6 +156,7 @@ export class Panel {
     // like an empty tab rather than a filtered one.
     this.filter = "";
     this.selectedIndex = 0;
+    this.focus = "tabs";
   }
 
   handleInput(data: string): void {
@@ -147,8 +165,7 @@ export class Panel {
     if (matchesKey(data, "right")) return this.switchTab(1);
     if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) return this.goBack();
 
-    // The Overview page has no list, so up and down would otherwise be dead keys there. They
-    // step through the tabs instead, which keeps every arrow doing something in every view.
+    // Overview is a page, not a list, so there is nothing for the cursor to drop into.
     if (this.isPage) {
       if (matchesKey(data, "up")) return this.switchTab(-1);
       if (matchesKey(data, "down")) return this.switchTab(1);
@@ -156,31 +173,47 @@ export class Panel {
     }
 
     const total = this.visibleEntries().length;
-    if (matchesKey(data, "up")) {
-      this.selectedIndex = moveSelection(total, this.selectedIndex, -1);
+
+    if (matchesKey(data, "down")) {
+      // Down from the tab strip is how you get into the list — the cursor moves, nothing else.
+      if (this.focus === "tabs") this.focus = "list";
+      else this.selectedIndex = moveSelection(total, this.selectedIndex, 1);
       return;
     }
-    if (matchesKey(data, "down")) {
-      this.selectedIndex = moveSelection(total, this.selectedIndex, 1);
+    if (matchesKey(data, "up")) {
+      // Up off the top row puts the cursor back on the tabs rather than sticking at row zero.
+      if (this.focus === "list" && this.selectedIndex === 0) this.focus = "tabs";
+      else if (this.focus === "list") this.selectedIndex = moveSelection(total, this.selectedIndex, -1);
       return;
     }
     if (matchesKey(data, "pageUp")) {
+      this.focus = "list";
       this.selectedIndex = moveSelection(total, this.selectedIndex, -VISIBLE_ROWS);
       return;
     }
     if (matchesKey(data, "pageDown")) {
+      this.focus = "list";
       this.selectedIndex = moveSelection(total, this.selectedIndex, VISIBLE_ROWS);
       return;
     }
     if (matchesKey(data, "home")) {
+      this.focus = "list";
       this.selectedIndex = 0;
       return;
     }
     if (matchesKey(data, "end")) {
+      this.focus = "list";
       this.selectedIndex = moveSelection(total, total - 1, 0);
       return;
     }
-    if (matchesKey(data, "enter")) return this.confirm();
+    if (matchesKey(data, "enter")) {
+      // Enter on the tabs drops into the list; from there it acts on the selected row.
+      if (this.focus === "tabs") {
+        this.focus = "list";
+        return;
+      }
+      return this.confirm();
+    }
     if (matchesKey(data, "backspace")) {
       if (this.filter !== "") {
         this.filter = this.filter.slice(0, -1);
@@ -192,6 +225,8 @@ export class Panel {
     if (data.length === 1 && PRINTABLE.test(data)) {
       this.filter += data;
       this.selectedIndex = 0;
+      // Typing is aimed at the results, so the cursor follows them down.
+      this.focus = "list";
     }
   }
 
@@ -199,7 +234,12 @@ export class Panel {
 
   render(width: number): string[] {
     const rule = `  ${RULE.repeat(Math.max(10, Math.min(width - 4, 70)))}`;
-    const lines: string[] = [renderTabBar(this.tabs, this.activeIndex, width), ""];
+    // On a page the cursor has nowhere else to be, so the tab always holds it there.
+    const onTabs = this.isPage || this.focus === "tabs";
+    const lines: string[] = [
+      renderTabBar(this.tabs, this.activeIndex, width, { paint: cursorPaint(onTabs) }),
+      "",
+    ];
 
     const drilled = this.drilledInto;
     if (drilled !== null) lines.push(`  ‹ Packages / ${drilled.name} ›`, "");
@@ -209,13 +249,23 @@ export class Panel {
     } else {
       const rows = this.visibleRows();
       lines.push(searchBox(this.filter, rows.length, this.baseEntries().length, width), "");
-      lines.push(...renderList(rows, { selectedIndex: this.selectedIndex, height: VISIBLE_ROWS, width }));
+      lines.push(
+        ...renderList(rows, {
+          selectedIndex: this.selectedIndex,
+          height: VISIBLE_ROWS,
+          width,
+          paint: cursorPaint(!onTabs),
+        }),
+      );
       lines.push(rule);
       lines.push(selectionLine(this.selectedEntry()));
       lines.push(...detailLines(this.selectedEntry(), this.home));
     }
 
     lines.push("", keyHint(this.mode(), this.filter));
+    // A fixed height throughout: nothing below the list may shift when the cursor moves, the
+    // filter changes, or a tab with fewer rows comes up.
+    while (lines.length < PANEL_HEIGHT) lines.push("");
     return lines;
   }
 }

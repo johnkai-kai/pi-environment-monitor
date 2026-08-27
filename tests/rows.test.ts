@@ -8,6 +8,7 @@ import {
   type Environment,
 } from "../src/inventory.ts";
 import {
+  DETAIL_LINES,
   DISABLED_MARK,
   buildRow,
   detailLines,
@@ -89,8 +90,15 @@ test("an overridden name lists what it beat, in the detail line", () => {
   assert.match(joined, /\.config\/mcp\/mcp\.json/);
 });
 
-test("with no row selected the detail area is blank rather than missing", () => {
-  assert.deepEqual(detailLines(null, "/base/u"), [""]);
+// The detail area used to grow with whatever the cursor was on, moving everything below it.
+test("the detail area is always the same height, selected or not", () => {
+  const none = detailLines(null, "/base/u");
+  const plain = detailLines(entry(), "/base/u");
+  const withShadows = detailLines(entry({ shadows: ["/a/one.json", "/a/two.json"] }), "/base/u");
+  assert.equal(none.length, DETAIL_LINES);
+  assert.equal(plain.length, DETAIL_LINES);
+  assert.equal(withShadows.length, DETAIL_LINES);
+  assert.deepEqual(none, ["", "", ""]);
 });
 
 // pi-tui's own filter is value.startsWith(), and value is an absolute path — so every row shared

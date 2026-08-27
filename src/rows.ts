@@ -86,15 +86,22 @@ export function buildRows(entries: readonly Entry[], options: RowOptions = {}): 
  * The detail line for the cursor row. This is where the path lives now, so it gets the full
  * width and never competes with a column.
  */
+export const DETAIL_LINES = 3;
+
 export function detailLines(entry: Entry | null, home: string): string[] {
-  if (entry === null) return [""];
-  const lines = [`  ${sanitizeText(shortenPath(entry.path, home))}`];
-  const shadows = entry.shadows ?? [];
-  if (shadows.length > 0) {
-    lines.push(`  overrides ${shadows.length === 1 ? "a definition" : `${shadows.length} definitions`} in:`);
-    for (const path of shadows) lines.push(`    ${sanitizeText(shortenPath(path, home))}`);
+  const lines: string[] = [];
+  if (entry !== null) {
+    lines.push(`  ${sanitizeText(shortenPath(entry.path, home))}`);
+    const shadows = entry.shadows ?? [];
+    if (shadows.length > 0) {
+      lines.push(`  overrides ${shadows.length === 1 ? "a definition" : `${shadows.length} definitions`} in:`);
+      for (const path of shadows) lines.push(`    ${sanitizeText(shortenPath(path, home))}`);
+    }
   }
-  return lines;
+  // Always the same number of lines: a detail area that grows with the selected row would move
+  // everything below it every time the cursor moved.
+  while (lines.length < DETAIL_LINES) lines.push("");
+  return lines.slice(0, DETAIL_LINES);
 }
 
 /**

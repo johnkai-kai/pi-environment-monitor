@@ -135,17 +135,49 @@ test("tabs wrap rather than dead-ending at either edge", () => {
   assert.equal(tabId(h), "overview");
 });
 
-test("up and down move the cursor and stop at the ends", () => {
+// One cursor moves through the whole panel: along the tabs, down into the list, back up out of
+// it. Two independent modes was what this replaced.
+test("down from the tab strip puts the cursor in the list, without moving a row", () => {
   const h = harness();
   h.press(LEGACY.right); // All
+  assert.equal(h.panel.focus, "tabs");
+  h.press(LEGACY.down);
+  assert.equal(h.panel.focus, "list");
+  assert.equal(h.panel.selectedIndex, 0, "entering the list should not also skip a row");
+});
+
+test("up from the first row lifts the cursor back to the tabs", () => {
+  const h = harness();
+  h.press(LEGACY.right, LEGACY.down, LEGACY.down);
+  assert.equal(h.panel.selectedIndex, 1);
+  h.press(LEGACY.up);
   assert.equal(h.panel.selectedIndex, 0);
+  assert.equal(h.panel.focus, "list");
+  h.press(LEGACY.up);
+  assert.equal(h.panel.focus, "tabs", "up off the top row should leave the list");
+});
+
+test("in the list, up and down move the cursor and stop at the ends", () => {
+  const h = harness();
+  h.press(LEGACY.right, LEGACY.down);
   h.press(LEGACY.down, LEGACY.down);
   assert.equal(h.panel.selectedIndex, 2);
-  h.press(LEGACY.up);
-  assert.equal(h.panel.selectedIndex, 1);
-  // Clamped, not wrapped — wrapping past the end reads as a glitch.
-  h.press(LEGACY.up, LEGACY.up, LEGACY.up);
-  assert.equal(h.panel.selectedIndex, 0);
+  h.press(LEGACY.down, LEGACY.down, LEGACY.down);
+  assert.equal(h.panel.selectedIndex, 3, "clamped at the last row rather than wrapping");
+});
+
+test("changing tab brings the cursor back to the strip", () => {
+  const h = harness();
+  h.press(LEGACY.right, LEGACY.down);
+  assert.equal(h.panel.focus, "list");
+  h.press(LEGACY.right);
+  assert.equal(h.panel.focus, "tabs");
+});
+
+test("typing moves the cursor to the results it is filtering", () => {
+  const h = harness();
+  h.press(LEGACY.right, "b");
+  assert.equal(h.panel.focus, "list");
 });
 
 test("typing filters the current tab and shows in the search box", () => {
@@ -182,16 +214,19 @@ test("filtering resets the cursor, so it cannot point past the matches", () => {
   assert.equal(h.panel.selectedIndex, 0);
 });
 
-test("enter copies the selected path and closes", () => {
+test("enter on the tabs drops into the list; enter again acts on the row", () => {
   const h = harness();
   h.press(LEGACY.right, ENTER);
+  assert.equal(h.panel.focus, "list");
+  assert.deepEqual(h.copied(), [], "the first enter should only move the cursor");
+  h.press(ENTER);
   assert.deepEqual(h.copied(), ["/base/skill/alpha"]);
   assert.ok(h.closed());
 });
 
 test("enter on the Packages tab opens the package instead of copying", () => {
   const h = harness();
-  h.press(LEGACY.left, ENTER); // wrap left to Packages
+  h.press(LEGACY.left, ENTER, ENTER); // wrap left to Packages, into the list, open it
   assert.equal(h.panel.drilledInto?.source, "npm:box");
   assert.deepEqual(h.copied(), []);
   assert.ok(!h.closed());
@@ -203,7 +238,7 @@ test("enter on the Packages tab opens the package instead of copying", () => {
 
 test("escape inside a package goes back rather than closing the panel", () => {
   const h = harness();
-  h.press(LEGACY.left, ENTER, ESC);
+  h.press(LEGACY.left, ENTER, ENTER, ESC);
   assert.equal(h.panel.drilledInto, null);
   assert.ok(!h.closed(), "escape closed the panel instead of stepping back");
   h.press(ESC);
@@ -232,17 +267,19 @@ test("up and down step through tabs on the Overview page", () => {
   assert.equal(tabId(up), "packages", "up from the first tab should wrap to the last");
 });
 
-test("once off Overview, up and down move the cursor rather than the tab", () => {
+test("once off Overview, down drives the cursor rather than the tab", () => {
   const h = harness();
-  h.press(LEGACY.down); // to All
-  h.press(LEGACY.down);
+  h.press(LEGACY.down); // Overview has no list, so this steps to the All tab
   assert.equal(tabId(h), "all");
-  assert.equal(h.panel.selectedIndex, 1);
+  h.press(LEGACY.down); // now there is a list, so the cursor drops into it
+  assert.equal(tabId(h), "all");
+  assert.equal(h.panel.focus, "list");
 });
 
 test("home and end jump to the ends of the list", () => {
   const h = harness();
   h.press(LEGACY.right, END);
+  assert.equal(h.panel.focus, "list", "jumping to an end should take the cursor with it");
   assert.equal(h.panel.selectedIndex, 3);
   h.press(HOME);
   assert.equal(h.panel.selectedIndex, 0);
@@ -263,8 +300,31 @@ test("end on an empty result does not point past the list", () => {
 
 test("the cursor row is marked in the list and named underneath it", () => {
   const h = harness();
-  h.press(LEGACY.right, LEGACY.down);
+  h.press(LEGACY.right, LEGACY.down, LEGACY.down);
   const screen = h.screen();
   assert.match(screen, /▌ .*beta/);
   assert.match(screen, /▌ beta {3}skill · user/);
+});
+
+// The panel jumping height as the filter narrowed the list moved everything under it.
+test("the panel is the same height in every view and at every filter", () => {
+  const heights = new Set<number>();
+  const h = harness();
+  // Overview included: switching off the page used to change the height by two lines.
+  for (let tab = 0; tab < h.panel.tabs.length; tab += 1) {
+    heights.add(h.panel.render(120).length);
+    h.press(LEGACY.down);
+    heights.add(h.panel.render(120).length);
+    h.press("z");
+    heights.add(h.panel.render(120).length);
+    h.press(BACKSPACE, LEGACY.right);
+  }
+  assert.equal(heights.size, 1, `panel changed height: ${[...heights].join(", ")}`);
+});
+
+test("opening a package does not change the height either", () => {
+  const h = harness();
+  const before = h.panel.render(120).length;
+  h.press(LEGACY.left, ENTER, ENTER);
+  assert.equal(h.panel.render(120).length, before);
 });

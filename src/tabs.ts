@@ -78,36 +78,52 @@ function tabText(tab: Tab): string {
   return tab.count === null ? tab.label : `${tab.label} ${tab.count}`;
 }
 
-const SEP = " │ ";
-const GROUP_SEP = " ║ ";
-const MARK_ACTIVE = "[";
-const MARK_ACTIVE_END = "]";
+const SEP = "│";
+const GROUP_SEP = "║";
+
+export interface TabBarOptions {
+  /** Paints the active tab. Without it the active tab is bracketed instead. */
+  paint?: (text: string) => string;
+}
 
 /**
  * The strip, or a single-tab indicator when it will not fit.
  *
- * The active tab is bracketed rather than only coloured: the panel has to stay readable where
- * colour does not survive — a pipe, a screenshot pasted into a bug report, a terminal with a
- * theme that flattens the highlight.
+ * Without a paint function the active tab is bracketed, so the strip stays readable where colour
+ * does not survive — a pipe, a screenshot in a bug report, a test asserting on plain text.
  */
-export function renderTabBar(tabs: readonly Tab[], activeIndex: number, width: number): string {
+export function renderTabBar(
+  tabs: readonly Tab[],
+  activeIndex: number,
+  width: number,
+  options: TabBarOptions = {},
+): string {
   const active = tabs[activeIndex];
   if (active === undefined) return "";
+  const paint = options.paint;
 
-  const parts = tabs.map((tab, index) =>
-    index === activeIndex ? `${MARK_ACTIVE}${tabText(tab)}${MARK_ACTIVE_END}` : ` ${tabText(tab)} `,
-  );
+  const cell = (tab: Tab, index: number): string => {
+    const text = ` ${tabText(tab)} `;
+    if (index !== activeIndex) return text;
+    return paint === undefined ? `[${tabText(tab)}]` : paint(text);
+  };
 
   let full = "";
-  for (const [index, part] of parts.entries()) {
-    if (index > 0) full += tabs[index]?.startsGroup === true ? GROUP_SEP : SEP;
-    full += part;
+  for (const [index, tab] of tabs.entries()) {
+    if (index > 0) full += tab.startsGroup ? GROUP_SEP : SEP;
+    full += cell(tab, index);
   }
-  if (full.length <= width) return full;
+  if (visibleWidth(full) <= width) return full;
 
   // Too narrow for the strip: name where you are and that there is more either side.
-  const compact = `‹ ${tabText(active)} ›  (${activeIndex + 1}/${tabs.length})`;
-  return compact.length <= width ? compact : tabText(active).slice(0, Math.max(0, width));
+  const label = `‹ ${tabText(active)} ›  (${activeIndex + 1}/${tabs.length})`;
+  if (label.length > width) return tabText(active).slice(0, Math.max(0, width));
+  return paint === undefined ? label : paint(label);
+}
+
+/** Length ignoring the escape sequences a paint function adds. */
+function visibleWidth(text: string): number {
+  return text.replace(/\x1b\[[0-9;]*m/g, "").length;
 }
 
 export function stepTab(tabs: readonly Tab[], activeIndex: number, delta: number): number {

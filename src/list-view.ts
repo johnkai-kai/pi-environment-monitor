@@ -57,8 +57,21 @@ export function nameColumnWidth(rows: readonly Row[], width: number): number {
   return Math.max(1, Math.min(widest, Math.max(8, available)));
 }
 
+/**
+ * Always exactly `height` rows plus one counter line, blank-padded.
+ *
+ * A list that shrinks to fit its contents makes the whole panel change height as you type or
+ * move, so the rule underneath it, the path and the key hints all jump around the screen. Fixed
+ * height costs a few blank lines and buys a panel that sits still.
+ */
 export function renderList(rows: readonly Row[], options: ListViewOptions): string[] {
-  if (rows.length === 0) return ["  nothing matches"];
+  const height = Math.max(1, options.height);
+  const fill = (lines: string[]): string[] => {
+    while (lines.length < height + 1) lines.push("");
+    return lines;
+  };
+
+  if (rows.length === 0) return fill(["  nothing matches"]);
 
   const paint = options.paint ?? ((text: string): string => text);
   const { start, end } = visibleRange(rows.length, options.selectedIndex, options.height);
@@ -76,10 +89,11 @@ export function renderList(rows: readonly Row[], options: ListViewOptions): stri
     lines.push(selected ? paint(text) : text);
   }
 
-  if (start > 0 || end < rows.length) {
-    lines.push(`    ${options.selectedIndex + 1} of ${rows.length}`);
-  }
-  return lines;
+  // The counter line is always present, empty when the whole list is on screen, so its coming
+  // and going cannot change the panel's height either.
+  const scrolled = start > 0 || end < rows.length;
+  lines.push(scrolled ? `    ${options.selectedIndex + 1} of ${rows.length}` : "");
+  return fill(lines);
 }
 
 /** Moves the cursor, clamped rather than wrapped — wrapping past the end feels like a glitch. */

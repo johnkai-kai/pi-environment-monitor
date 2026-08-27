@@ -42,7 +42,25 @@ test("the cursor is always on screen, wherever it is", () => {
 });
 
 test("an empty list says so rather than rendering nothing", () => {
-  assert.deepEqual(renderList([], { selectedIndex: 0, height: 10, width: 80 }), ["  nothing matches"]);
+  const lines = renderList([], { selectedIndex: 0, height: 10, width: 80 });
+  assert.equal(lines[0], "  nothing matches");
+});
+
+// A list that shrank to fit its contents moved the rule, the path and the key hints every time
+// the filter changed, so the whole panel jumped around while you typed.
+test("the list is always the same height, whatever it holds", () => {
+  const heights = [[], many(1), many(5), many(400)].map(
+    (rows) => renderList(rows, { selectedIndex: 0, height: 10, width: 80 }).length,
+  );
+  assert.equal(new Set(heights).size, 1, `heights differed: ${heights.join(", ")}`);
+});
+
+test("the scroll counter keeps its line even when the list fits", () => {
+  const short = renderList(many(3), { selectedIndex: 0, height: 10, width: 80 });
+  const long = renderList(many(30), { selectedIndex: 0, height: 10, width: 80 });
+  assert.equal(short.length, long.length);
+  assert.match(long[10] as string, /1 of 30/);
+  assert.equal(short[10], "");
 });
 
 test("exactly one row carries the cursor mark", () => {
@@ -54,12 +72,12 @@ test("exactly one row carries the cursor mark", () => {
 
 test("a scrolled list says where you are in it", () => {
   const lines = renderList(many(40), { selectedIndex: 20, height: 10, width: 80 });
-  assert.match(lines.at(-1) as string, /21 of 40/);
+  assert.match(lines.join("\n"), /21 of 40/);
 });
 
 test("a list that fits gets no scroll counter", () => {
   const lines = renderList(many(4), { selectedIndex: 0, height: 10, width: 80 });
-  assert.ok(!(lines.at(-1) as string).includes(" of "));
+  assert.ok(!lines.join("\n").includes(" of "));
 });
 
 test("no line ever runs past the width it was given", () => {
