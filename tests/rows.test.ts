@@ -208,3 +208,7 @@ test("the name column never eats the whole terminal", () => {
   // Even absurdly narrow terminals leave something for a name.
   assert.ok(primaryColumnWidth(rows, 10) >= 20);
 });
+
+test("a built-in says it came with pi rather than showing a scope nobody asked about", () => {
+  assert.equal(sourceLabel(entry({ kind: "theme", scope: "builtin", source: "builtin" })), "built into pi");
+});

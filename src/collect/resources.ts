@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   DefaultPackageManager,
+  getPackageDir,
   hasTrustRequiringProjectResources,
   ProjectTrustStore,
   SettingsManager,
@@ -10,6 +11,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Entry, Environment, Inventory, Kind, Scope } from "../inventory.ts";
 import { compareEntries } from "../inventory.ts";
+import { builtinThemes } from "./builtins.ts";
 import { FS_READERS } from "./fs-readers.ts";
 import { scanMcp } from "./mcp.ts";
 import { displayName } from "./names.ts";
@@ -161,6 +163,12 @@ export async function collectInventory(options: CollectOptions): Promise<Invento
     entries.push(...scanMcp({ agentDir, cwd, home, packageRoots, readers }));
   } catch (error) {
     errors.push(`mcp: ${describe(error)}`);
+  }
+
+  try {
+    entries.push(...builtinThemes(getPackageDir(), readers));
+  } catch (error) {
+    errors.push(`built-in themes: ${describe(error)}`);
   }
 
   entries.sort(compareEntries);

@@ -42,8 +42,25 @@ const BASE = [
 
 test("the headline separates the boxes from what is inside them", () => {
   const out = text(inventory(BASE));
-  assert.match(out, /1 package {2}\+ {2}3 things they contribute/);
-  assert.match(out, /2 of those live inside a package · 1 are standalone/);
+  assert.match(out, /1 package {2}\+ {2}3 things installed/);
+  assert.match(out, /2 came inside a package · 1 standalone/);
+});
+
+// pi ships dark and light, so counting only what the user installed says "2 themes" to someone
+// who can actually choose from four.
+test("built-in themes are counted apart from installed ones, never blended in", () => {
+  const out = text(
+    inventory([
+      ...BASE,
+      entry("theme", "cc-dark", { origin: "package", source: "npm:pi-cc" }),
+      entry("theme", "dark", { scope: "builtin", source: "builtin" }),
+      entry("theme", "light", { scope: "builtin", source: "builtin" }),
+    ]),
+  );
+  assert.match(out, /theme\s+3\s+1 from packages\s+2 built into pi/);
+  // They were not installed, so they must not inflate the installed total.
+  assert.match(out, /1 package {2}\+ {2}4 things installed/);
+  assert.match(out, /plus 2 built into pi/);
 });
 
 test("each kind reports how many came from packages and how many stand alone", () => {

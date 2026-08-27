@@ -56,7 +56,11 @@ const piDiagnostics = [
 
 head("ours vs pi's ResourceLoader");
 for (const [kind, piPaths] of Object.entries(piSets)) {
-  const oursPaths = (byKind[kind] ?? []).filter((e) => e.enabled).map((e) => e.path);
+  // Built-ins ship inside pi and are not installed resources, so pi's ResourceLoader does not
+  // return them either. Comparing them would be comparing against something neither side lists.
+  const oursPaths = (byKind[kind] ?? [])
+    .filter((e) => e.enabled && e.scope !== "builtin")
+    .map((e) => e.path);
   const o = new Set(oursPaths.map(norm));
   const p = new Set(piPaths.map(norm));
   const missing = [...p].filter((x) => !o.has(x));

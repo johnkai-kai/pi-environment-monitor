@@ -38,8 +38,9 @@ function countsBlock(entries: readonly Entry[]): string[] {
     if (kind === "package") continue;
     const list = entries.filter((entry) => entry.kind === kind);
     if (list.length === 0 && kind === "mcp") continue;
+    const builtIn = list.filter((entry) => entry.scope === "builtin").length;
     const fromPackages = list.filter((entry) => entry.origin === "package").length;
-    const standalone = list.length - fromPackages;
+    const standalone = list.length - fromPackages - builtIn;
     // MCP servers come from config files rather than from an install, so "standalone" would be
     // the wrong word for them.
     const loose = kind === "mcp" ? "from config files" : "standalone";
@@ -48,7 +49,10 @@ function countsBlock(entries: readonly Entry[]): string[] {
         ? "none installed"
         : [
             fromPackages > 0 ? pad(`${fromPackages} from packages`, 20) : "",
-            standalone > 0 ? `${standalone} ${loose}` : "",
+            standalone > 0 ? pad(`${standalone} ${loose}`, 22) : "",
+            // Themes are the case: pi ships two, so counting only the installed ones says "2"
+            // to someone who can choose from four.
+            builtIn > 0 ? `${builtIn} built into pi` : "",
           ]
             .filter((part) => part !== "")
             .join("");
@@ -114,10 +118,17 @@ export function overviewLines(inventory: Inventory, width: number, home = ""): s
   const insidePackages = contents.filter((entry) => entry.origin === "package").length;
   const rule = RULE.repeat(Math.max(10, Math.min(width - 4, 70)));
 
+  const builtIn = contents.filter((entry) => entry.scope === "builtin").length;
+  const installed = contents.length - builtIn;
+  const standalone = installed - insidePackages;
+
   const lines: string[] = [
     "",
-    `  ${plural(packages.length, "package")}  +  ${contents.length} things they contribute`,
-    `  ${insidePackages} of those live inside a package · ${contents.length - insidePackages} are standalone`,
+    `  ${plural(packages.length, "package")}  +  ${installed} things installed`,
+    // The two clauses have to add up to the line above them, so built-ins — which nobody
+    // installed — get their own line rather than a third clause that breaks the sum.
+    `  ${insidePackages} came inside a package · ${standalone} standalone`,
+    ...(builtIn > 0 ? [`  plus ${builtIn} built into pi, which you did not install and cannot remove`] : []),
     "",
     ...countsBlock(entries),
     "",

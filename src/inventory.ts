@@ -8,8 +8,11 @@ export const KINDS = ["skill", "extension", "mcp", "package", "theme", "prompt"]
 
 export type Kind = (typeof KINDS)[number];
 
-/** pi's own scope names, plus `unknown` for sources pi does not label. */
-export type Scope = "user" | "project" | "temporary" | "unknown";
+/**
+ * pi's own scope names, plus two of ours: `builtin` for things that ship inside pi and were
+ * never installed, and `unknown` for sources pi does not label.
+ */
+export type Scope = "user" | "project" | "temporary" | "builtin" | "unknown";
 
 export interface Entry {
   kind: Kind;

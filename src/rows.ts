@@ -28,6 +28,9 @@ function pad(text: string, width: number): string {
 
 /** Where the entry came from, in the fewest words that stay unambiguous. */
 export function sourceLabel(entry: Entry): string {
+  // Says "you did not install this and cannot remove it", which is the useful fact about a
+  // built-in — its scope alone would just read "builtin".
+  if (entry.scope === "builtin") return "built into pi";
   if (entry.origin === "package") return `package ${entry.source}`;
   if (entry.source.startsWith("import:")) return entry.source.replace("import:", "imported from ");
   return entry.scope;
