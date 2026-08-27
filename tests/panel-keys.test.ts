@@ -19,6 +19,9 @@ const ENTER = "\r";
 const BACKSPACE = "\x7f";
 // Kitty encodes escape as CSI 27 u.
 const KITTY_ESC = "\x1b[27u";
+const HOME = "\x1b[H";
+const END = "\x1b[F";
+const PAGE_DOWN = "\x1b[6~";
 
 function entry(kind: Kind, name: string, over: Partial<Entry> = {}): Entry {
   return {
@@ -215,6 +218,47 @@ test("every view renders without throwing, at wide and narrow widths", () => {
       h.press(LEGACY.right);
     }
   }
+});
+
+// On Overview there is no list for up and down to drive, so they step tabs instead and no
+// arrow is dead. Once you leave Overview they go back to meaning "move the cursor".
+test("up and down step through tabs on the Overview page", () => {
+  const down = harness();
+  down.press(LEGACY.down);
+  assert.equal(tabId(down), "all");
+
+  const up = harness();
+  up.press(LEGACY.up);
+  assert.equal(tabId(up), "packages", "up from the first tab should wrap to the last");
+});
+
+test("once off Overview, up and down move the cursor rather than the tab", () => {
+  const h = harness();
+  h.press(LEGACY.down); // to All
+  h.press(LEGACY.down);
+  assert.equal(tabId(h), "all");
+  assert.equal(h.panel.selectedIndex, 1);
+});
+
+test("home and end jump to the ends of the list", () => {
+  const h = harness();
+  h.press(LEGACY.right, END);
+  assert.equal(h.panel.selectedIndex, 3);
+  h.press(HOME);
+  assert.equal(h.panel.selectedIndex, 0);
+});
+
+test("page down moves further than one row, and still stops at the end", () => {
+  const h = harness();
+  h.press(LEGACY.right, PAGE_DOWN);
+  assert.equal(h.panel.selectedIndex, 3);
+});
+
+test("end on an empty result does not point past the list", () => {
+  const h = harness();
+  h.press(LEGACY.right, "z", "z", END);
+  assert.equal(h.panel.selectedIndex, 0);
+  assert.equal(h.panel.render(120).includes("  nothing matches"), true);
 });
 
 test("the cursor row is marked in the list and named underneath it", () => {

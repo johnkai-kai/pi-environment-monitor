@@ -147,7 +147,13 @@ export class Panel {
     if (matchesKey(data, "right")) return this.switchTab(1);
     if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) return this.goBack();
 
-    if (this.isPage) return;
+    // The Overview page has no list, so up and down would otherwise be dead keys there. They
+    // step through the tabs instead, which keeps every arrow doing something in every view.
+    if (this.isPage) {
+      if (matchesKey(data, "up")) return this.switchTab(-1);
+      if (matchesKey(data, "down")) return this.switchTab(1);
+      return;
+    }
 
     const total = this.visibleEntries().length;
     if (matchesKey(data, "up")) {
@@ -164,6 +170,14 @@ export class Panel {
     }
     if (matchesKey(data, "pageDown")) {
       this.selectedIndex = moveSelection(total, this.selectedIndex, VISIBLE_ROWS);
+      return;
+    }
+    if (matchesKey(data, "home")) {
+      this.selectedIndex = 0;
+      return;
+    }
+    if (matchesKey(data, "end")) {
+      this.selectedIndex = moveSelection(total, total - 1, 0);
       return;
     }
     if (matchesKey(data, "enter")) return this.confirm();

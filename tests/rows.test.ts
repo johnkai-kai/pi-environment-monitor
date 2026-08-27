@@ -127,8 +127,10 @@ test("the key hint lists the keys for the view you are in", () => {
   assert.match(keyHint("list", ""), /↑↓ move/);
   assert.match(keyHint("packages", ""), /enter open package/);
   assert.match(keyHint("drill", ""), /esc back/);
-  // The Overview page has no list, so offering move keys there would be a lie.
-  assert.ok(!keyHint("page", "").includes("↑↓"));
+  // On Overview every arrow switches tabs, so the hint groups them rather than offering
+  // "move", which there is nothing to move.
+  assert.match(keyHint("page", ""), /↑↓←→ tab/);
+  assert.ok(!keyHint("page", "").includes("move"));
 });
 
 // A filter mentioned only in a footer hint is a filter nobody finds — and in the first version

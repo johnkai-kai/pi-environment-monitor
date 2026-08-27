@@ -145,10 +145,10 @@ export function selectionLine(entry: Entry | null): string {
   return `  ▌ ${sanitizeText(entry.name)}${off}   ${entry.kind} · ${sanitizeText(sourceLabel(entry))}`;
 }
 
-const LIST_KEYS = "↑↓ move   ←→ tab   enter copy   esc close";
+const LIST_KEYS = "↑↓ move   home/end ends   ←→ tab   enter copy   esc close";
 const DRILL_KEYS = "↑↓ move   enter copy path   esc back";
 const PACKAGE_KEYS = "↑↓ move   ←→ tab   enter open package   esc close";
-const PAGE_KEYS = "←→ tab   esc close";
+const PAGE_KEYS = "↑↓←→ tab   esc close";
 
 export type KeyHintMode = "list" | "packages" | "drill" | "page";
 
