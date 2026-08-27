@@ -1,4 +1,6 @@
 import { KINDS, type Entry, type Kind } from "./inventory.ts";
+import type { Skin } from "./skin.ts";
+import { visibleWidth } from "./width.ts";
 
 // The tab strip, as data. Pure: no pi, no pi-tui, so which tabs exist and what they hold is
 // testable without a terminal.
@@ -80,10 +82,15 @@ function tabText(tab: Tab): string {
 
 const SEP = "│";
 const GROUP_SEP = "║";
+/** The same marker the list uses for its cursor row, so one glyph means one thing. */
+const CURSOR_MARK = "▌";
 
 export interface TabBarOptions {
-  /** Paints the active tab. Without it the active tab is bracketed instead. */
-  paint?: (text: string) => string;
+  skin: Skin;
+  /** True when the cursor is on the strip rather than down in the list. */
+  focused: boolean;
+  /** Set for plain-text rendering: the active tab is bracketed instead of coloured. */
+  plain?: boolean;
 }
 
 /**
@@ -96,34 +103,36 @@ export function renderTabBar(
   tabs: readonly Tab[],
   activeIndex: number,
   width: number,
-  options: TabBarOptions = {},
+  options: TabBarOptions,
 ): string {
   const active = tabs[activeIndex];
   if (active === undefined) return "";
-  const paint = options.paint;
+  const { skin, focused } = options;
 
+  // The active tab wears the same clothes as the cursor row in the list: filled with
+  // selectedBg, an accent marker and bold text while it holds the cursor, the fill alone once
+  // the cursor has moved down into the list. One vocabulary, two places.
   const cell = (tab: Tab, index: number): string => {
-    const text = ` ${tabText(tab)} `;
-    if (index !== activeIndex) return text;
-    return paint === undefined ? `[${tabText(tab)}]` : paint(text);
+    const text = tabText(tab);
+    if (index !== activeIndex) return skin.muted(` ${text} `);
+    if (options.plain === true) return `[${text}]`;
+    return focused
+      ? skin.accent(CURSOR_MARK) + skin.fill(skin.bold(skin.text(`${text} `)))
+      : skin.fill(skin.muted(` ${text} `));
   };
 
   let full = "";
   for (const [index, tab] of tabs.entries()) {
-    if (index > 0) full += tab.startsGroup ? GROUP_SEP : SEP;
+    if (index > 0) full += skin.dim(tab.startsGroup ? GROUP_SEP : SEP);
     full += cell(tab, index);
   }
   if (visibleWidth(full) <= width) return full;
 
   // Too narrow for the strip: name where you are and that there is more either side.
   const label = `‹ ${tabText(active)} ›  (${activeIndex + 1}/${tabs.length})`;
-  if (label.length > width) return tabText(active).slice(0, Math.max(0, width));
-  return paint === undefined ? label : paint(label);
-}
-
-/** Length ignoring the escape sequences a paint function adds. */
-function visibleWidth(text: string): number {
-  return text.replace(/\x1b\[[0-9;]*m/g, "").length;
+  if (visibleWidth(label) > width) return tabText(active).slice(0, Math.max(0, width));
+  if (options.plain === true) return label;
+  return focused ? skin.fill(skin.bold(skin.text(label))) : skin.fill(skin.muted(label));
 }
 
 export function stepTab(tabs: readonly Tab[], activeIndex: number, delta: number): number {

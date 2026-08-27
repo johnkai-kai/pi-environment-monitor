@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { plainSkin } from "../src/skin.ts";
+import { visibleWidth } from "../src/width.ts";
 import {
   compareEntries,
   countByKind,
@@ -79,12 +81,12 @@ test("the source column names the package, the scope, or the tool imported from"
 
 test("the detail line shortens the home prefix but the row's value stays absolute", () => {
   const item = entry();
-  assert.match(detailLines(item, "/base/u")[0] as string, /^ {2}~\/\.pi\/agent/);
+  assert.match(detailLines(item, "/base/u", plainSkin())[0] as string, /^ {2}~\/\.pi\/agent/);
   assert.equal(buildRow(item).value, item.path);
 });
 
 test("an overridden name lists what it beat, in the detail line", () => {
-  const lines = detailLines(entry({ kind: "mcp", shadows: ["/base/u/.config/mcp/mcp.json"] }), "/base/u");
+  const lines = detailLines(entry({ kind: "mcp", shadows: ["/base/u/.config/mcp/mcp.json"] }), "/base/u", plainSkin());
   const joined = lines.join("\n");
   assert.match(joined, /overrides a definition in:/);
   assert.match(joined, /\.config\/mcp\/mcp\.json/);
@@ -92,9 +94,9 @@ test("an overridden name lists what it beat, in the detail line", () => {
 
 // The detail area used to grow with whatever the cursor was on, moving everything below it.
 test("the detail area is always the same height, selected or not", () => {
-  const none = detailLines(null, "/base/u");
-  const plain = detailLines(entry(), "/base/u");
-  const withShadows = detailLines(entry({ shadows: ["/a/one.json", "/a/two.json"] }), "/base/u");
+  const none = detailLines(null, "/base/u", plainSkin());
+  const plain = detailLines(entry(), "/base/u", plainSkin());
+  const withShadows = detailLines(entry({ shadows: ["/a/one.json", "/a/two.json"] }), "/base/u", plainSkin());
   assert.equal(none.length, DETAIL_LINES);
   assert.equal(plain.length, DETAIL_LINES);
   assert.equal(withShadows.length, DETAIL_LINES);
@@ -124,7 +126,7 @@ test("terminal escape sequences never reach a row or a detail line", () => {
   const BEL = String.fromCharCode(7);
   const item = entry({ name: `ev${ESC}]0;pwned${BEL}il`, path: `/a${ESC}[2Jb` });
   const row = buildRow(item);
-  for (const text of [row.label, row.description, row.value, ...detailLines(item, "")]) {
+  for (const text of [row.label, row.description, row.value, ...detailLines(item, "", plainSkin())]) {
     assert.ok(!text.includes(ESC), `escape survived in ${JSON.stringify(text)}`);
     assert.ok(!text.includes(BEL), `bell survived in ${JSON.stringify(text)}`);
   }
@@ -132,36 +134,36 @@ test("terminal escape sequences never reach a row or a detail line", () => {
 });
 
 test("the key hint lists the keys for the view you are in", () => {
-  assert.match(keyHint("list", ""), /↑↓ move/);
-  assert.match(keyHint("packages", ""), /enter open package/);
-  assert.match(keyHint("drill", ""), /esc back/);
+  assert.match(keyHint("list", "", plainSkin()), /↑↓ move/);
+  assert.match(keyHint("packages", "", plainSkin()), /enter open package/);
+  assert.match(keyHint("drill", "", plainSkin()), /esc back/);
   // On Overview every arrow switches tabs, so the hint groups them rather than offering
   // "move", which there is nothing to move.
-  assert.match(keyHint("page", ""), /↑↓←→ tab/);
-  assert.ok(!keyHint("page", "").includes("move"));
+  assert.match(keyHint("page", "", plainSkin()), /↑↓←→ tab/);
+  assert.ok(!keyHint("page", "", plainSkin()).includes("move"));
 });
 
 // A filter mentioned only in a footer hint is a filter nobody finds — and in the first version
 // that hint advertised one that did not work at all.
 test("the search box is drawn whether or not anything is typed", () => {
-  assert.match(searchBox("", 12, 12, 80), /search/);
-  assert.match(searchBox("", 12, 12, 80), /12 items/);
-  assert.match(searchBox("tele", 4, 12, 80), /search {2}tele/);
-  assert.match(searchBox("tele", 4, 12, 80), /4 of 12/);
-  assert.match(searchBox("", 1, 1, 80), /1 item$/);
+  assert.match(searchBox("", 12, 12, 80, plainSkin()), /search/);
+  assert.match(searchBox("", 12, 12, 80, plainSkin()), /12 items/);
+  assert.match(searchBox("tele", 4, 12, 80, plainSkin()), /search {2}tele/);
+  assert.match(searchBox("tele", 4, 12, 80, plainSkin()), /4 of 12/);
+  assert.match(searchBox("", 1, 1, 80, plainSkin()), /1 item$/);
 });
 
 test("the search box fits the width it is given", () => {
   for (const width of [40, 80, 200]) {
-    assert.ok(searchBox("abc", 2, 9, width).length <= width, `too wide at ${width}`);
+    assert.ok(visibleWidth(searchBox("abc", 2, 9, width, plainSkin())) <= width, `too wide at ${width}`);
   }
 });
 
 test("the selection line names what the cursor is on, without relying on colour", () => {
-  assert.match(selectionLine(entry({ name: "herdr" })), /▌ herdr/);
-  assert.match(selectionLine(entry({ name: "herdr" })), /skill · user/);
-  assert.match(selectionLine(entry({ enabled: false })), /\[off\]/);
-  assert.equal(selectionLine(null), "  nothing selected");
+  assert.match(selectionLine(entry({ name: "herdr" }), plainSkin()), /herdr/);
+  assert.match(selectionLine(entry({ name: "herdr" }), plainSkin()), /skill · user/);
+  assert.match(selectionLine(entry({ enabled: false }), plainSkin()), /\[off\]/);
+  assert.equal(selectionLine(null, plainSkin()), "  nothing selected");
 });
 
 test("the summary names every kind present and the disabled total", () => {

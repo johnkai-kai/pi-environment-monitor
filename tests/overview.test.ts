@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Entry, Environment, Inventory, Kind } from "../src/inventory.ts";
+import { plainSkin } from "../src/skin.ts";
 import { overviewLines, shortenPath } from "../src/overview.ts";
 
 function entry(kind: Kind, name: string, over: Partial<Entry> = {}): Entry {
@@ -31,7 +32,7 @@ function inventory(entries: Entry[], env: Partial<Environment> = {}, errors: str
   };
 }
 
-const text = (inv: Inventory): string => overviewLines(inv, 100).join("\n");
+const text = (inv: Inventory): string => overviewLines(inv, 100, "", plainSkin()).join("\n");
 
 const BASE = [
   entry("skill", "herdr"),
@@ -133,5 +134,5 @@ test("the home prefix shortens for display only", () => {
 });
 
 test("an empty inventory renders without throwing", () => {
-  assert.ok(overviewLines(inventory([]), 80).length > 0);
+  assert.ok(overviewLines(inventory([]), 80, "", plainSkin()).length > 0);
 });

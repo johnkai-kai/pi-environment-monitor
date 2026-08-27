@@ -4,15 +4,18 @@ An inventory panel for the [pi](https://github.com/earendil-works/pi) coding age
 What is installed, and where does it actually live?
 
 ```
- Overview │ All 31 │[skill 12]│ ext 13 │ mcp 2 │ theme 4 │ prompt 0 ║ Packages 12
-
-  search  hud█                                                            2 of 12
-
-▌ pi-statusline-hud        package git:github.com/johnkai-kai/pi-statusline-hud
-  pi-statusline-hud-setup  package git:github.com/johnkai-kai/pi-statusline-hud
-  ──────────────────────────────────────────────────────────────────────
-  ▌ pi-statusline-hud   skill · package git:github.com/johnkai-kai/pi-statusline-hud
-  ~/.pi/agent/git/github.com/johnkai-kai/pi-statusline-hud/skills/pi-statusline-hud/SKILL.md
+┌─ pi environment ───────────────────────────────────────────────────────────────┐
+│  Overview │ All 31 │ skill 12 │ ext 13 │ mcp 2 │ theme 4 │ prompt 0 ║ Packages │
+├────────────────────────────────────────────────────────────────────────────────┤
+│   search  hud█                                                         2 of 12 │
+│                                                                                │
+│ ▌ pi-statusline-hud        package git:github.com/johnkai-kai/pi-statusline-hud │
+│   pi-statusline-hud-setup  package git:github.com/johnkai-kai/pi-statusline-hud │
+├────────────────────────────────────────────────────────────────────────────────┤
+│   pi-statusline-hud   skill · package git:github.com/johnkai-kai/pi-statuslin…  │
+│   ~/.pi/agent/git/github.com/johnkai-kai/pi-statusline-hud/skills/pi-statusli…  │
+└────────────────────────────────────────────────────────────────────────────────┘
+ ↑↓ move   home/end ends   ←→ tab   enter copy   esc close
 ```
 
 ## Install
@@ -61,8 +64,11 @@ tokens.
 
 ## Keys
 
-One cursor moves through the whole panel — a light-orange block that is always
-on whatever the next key acts on.
+One cursor moves through the whole panel, and it is always on whatever the next
+key acts on. Where it is shows twice over: the row or tab it sits on is filled
+and carries a `▌`, and the border turns accent-coloured while the cursor is down
+in the list. The place you came from keeps its fill but loses the marker, so you
+never lose your position and never see two things claiming to be selected.
 
 | Key | Action |
 | --- | --- |
@@ -90,6 +96,19 @@ row, and counting boxes together with their contents no longer misleads.
 
 `mcp` appears only when a server is found, because pi has no MCP support of its
 own; see below.
+
+## Appearance
+
+Every colour comes from your pi theme — `text`, `muted`, `dim`, `accent`,
+`warning` and the `selectedBg` background, the same roles pi's own selectors
+use. Nothing is hardcoded, so the panel follows a light theme, a dark one, or
+one you wrote yourself, and switching theme mid-session recolours it with no
+restart.
+
+Widths are measured with pi-tui's `visibleWidth`, not `String.length`. A path
+containing CJK characters measures shorter than it draws — `工作區` is three
+characters and six cells — which would push the right-hand border out one cell
+per character. Measuring the way pi measures is what makes the border reliable.
 
 ## Notes
 

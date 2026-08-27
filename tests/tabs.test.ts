@@ -1,3 +1,4 @@
+import { plainSkin } from "../src/skin.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Entry, Kind } from "../src/inventory.ts";
@@ -79,7 +80,7 @@ test("the kind column shows on All and nowhere else — elsewhere it repeats one
 });
 
 test("the strip marks the active tab with brackets, not colour alone", () => {
-  const bar = renderTabBar(buildTabs(SAMPLE), 2, 200);
+  const bar = renderTabBar(buildTabs(SAMPLE), 2, 200, { skin: plainSkin(), focused: true, plain: true });
   assert.match(bar, /\[skill 2\]/);
   assert.match(bar, /Overview/);
   // Packages sits past a heavier divider because it is a different layer.
@@ -87,14 +88,14 @@ test("the strip marks the active tab with brackets, not colour alone", () => {
 });
 
 test("a strip too wide for the terminal degrades to naming where you are", () => {
-  const bar = renderTabBar(buildTabs(SAMPLE), 2, 30);
+  const bar = renderTabBar(buildTabs(SAMPLE), 2, 30, { skin: plainSkin(), focused: true, plain: true });
   assert.ok(bar.length <= 30, `"${bar}" is ${bar.length} wide`);
   assert.match(bar, /skill/);
   assert.match(bar, /3\/7/);
 });
 
 test("an absurdly narrow terminal still returns something that fits", () => {
-  const bar = renderTabBar(buildTabs(SAMPLE), 0, 5);
+  const bar = renderTabBar(buildTabs(SAMPLE), 0, 5, { skin: plainSkin(), focused: true, plain: true });
   assert.ok(bar.length <= 5);
 });
 
@@ -114,5 +115,5 @@ test("an unknown tab id falls back to the first tab rather than -1", () => {
 test("an empty inventory still produces a usable strip", () => {
   const tabs = buildTabs([]);
   assert.deepEqual(tabs.map((tab) => tab.id), ["overview", "all", "skill", "extension", "theme", "prompt", "packages"]);
-  assert.ok(renderTabBar(tabs, 0, 120).length > 0);
+  assert.ok(renderTabBar(tabs, 0, 120, { skin: plainSkin(), focused: true, plain: true }).length > 0);
 });

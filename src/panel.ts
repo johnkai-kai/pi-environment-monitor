@@ -9,9 +9,11 @@ import { matchesKey } from "@earendil-works/pi-tui";
 import { collectInventory } from "./collect/resources.ts";
 import { debugLogPath, writeDebug } from "./debug.ts";
 import type { Entry, Inventory } from "./inventory.ts";
-import { cursorPaint, type Focus } from "./highlight.ts";
+import { canFrame, frameBottom, frameDivider, frameRow, frameTop, innerWidth } from "./frame.ts";
+import { plainSkin, skinFromTheme, type Skin } from "./skin.ts";
+import { clip } from "./width.ts";
 import { moveSelection, renderList } from "./list-view.ts";
-import { overviewLines } from "./overview.ts";
+import { overviewLines, overviewSections } from "./overview.ts";
 import {
   buildRows,
   detailLines,
@@ -37,6 +39,10 @@ const LIST_HEIGHT = 2 + 2 + VISIBLE_ROWS + 1 + 1 + 1 + DETAIL_LINES + 2;
 const PANEL_HEIGHT = Math.max(LIST_HEIGHT, 28);
 const PRINTABLE = /^[\x20-\x7e]$/;
 const RULE = "─";
+const TITLE = "pi environment";
+
+/** Which half of the panel holds the cursor. */
+export type Focus = "tabs" | "list";
 
 // Keys go through pi-tui's matchesKey, never raw byte comparison.
 //
@@ -71,6 +77,11 @@ export class Panel {
   focus: Focus = "tabs";
   /** The package being looked inside, or null at the top level. */
   drilledInto: Entry | null = null;
+  /**
+   * How everything gets coloured. Defaults to no colour at all, which is what the tests and
+   * scripts/render-panel.mjs use, so layout can be asserted as plain text.
+   */
+  skin: Skin = plainSkin();
 
   constructor(
     inventory: Inventory,
@@ -78,12 +89,14 @@ export class Panel {
     tabs: Tab[],
     done: (result: null) => void,
     onCopy: (path: string) => void,
+    skin: Skin = plainSkin(),
   ) {
     this.inventory = inventory;
     this.home = home;
     this.tabs = tabs;
     this.done = done;
     this.onCopy = onCopy;
+    this.skin = skin;
   }
 
   private get activeTab(): Tab {
@@ -232,37 +245,75 @@ export class Panel {
 
   invalidate(): void {}
 
-  render(width: number): string[] {
-    const rule = `  ${RULE.repeat(Math.max(10, Math.min(width - 4, 70)))}`;
+  /**
+   * The panel's contents, in blocks, with no frame and no fixed height.
+   *
+   * Blocks rather than lines because a divider inside a frame has to reach both borders, which
+   * a block that only knows its own text cannot draw. render() decides what goes between them.
+   */
+  private sections(width: number): string[][] {
+    const skin = this.skin;
     // On a page the cursor has nowhere else to be, so the tab always holds it there.
     const onTabs = this.isPage || this.focus === "tabs";
-    const lines: string[] = [
-      renderTabBar(this.tabs, this.activeIndex, width, { paint: cursorPaint(onTabs) }),
-      "",
-    ];
+    const head: string[] = [renderTabBar(this.tabs, this.activeIndex, width, { skin, focused: onTabs })];
 
     const drilled = this.drilledInto;
-    if (drilled !== null) lines.push(`  ‹ Packages / ${drilled.name} ›`, "");
+    if (drilled !== null) head.push("", skin.muted(`  ‹ Packages / ${drilled.name} ›`));
 
-    if (this.isPage) {
-      lines.push(...overviewLines(this.inventory, width, this.home));
-    } else {
-      const rows = this.visibleRows();
-      lines.push(searchBox(this.filter, rows.length, this.baseEntries().length, width), "");
-      lines.push(
-        ...renderList(rows, {
-          selectedIndex: this.selectedIndex,
-          height: VISIBLE_ROWS,
-          width,
-          paint: cursorPaint(!onTabs),
-        }),
-      );
-      lines.push(rule);
-      lines.push(selectionLine(this.selectedEntry()));
-      lines.push(...detailLines(this.selectedEntry(), this.home));
+    if (this.isPage) return [head, ...overviewSections(this.inventory, width, this.home, skin)];
+
+    const rows = this.visibleRows();
+    const body = [
+      searchBox(this.filter, rows.length, this.baseEntries().length, width, skin),
+      "",
+      ...renderList(rows, {
+        selectedIndex: this.selectedIndex,
+        height: VISIBLE_ROWS,
+        width,
+        skin,
+        focused: !onTabs,
+      }),
+    ];
+    const detail = [selectionLine(this.selectedEntry(), skin), ...detailLines(this.selectedEntry(), this.home, skin)];
+    return [head, body, detail];
+  }
+
+  render(width: number): string[] {
+    const skin = this.skin;
+    // Clipped: the full hint is 58 cells and a narrow terminal would let it run off the edge,
+    // which is invisible in a headless render and ugly in a real one.
+    const hint = clip(keyHint(this.mode(), this.filter, skin), width);
+
+    if (!canFrame(width)) {
+      // Too narrow to spend four columns on a border. Fall back to the flat layout rather than
+      // draw a box with nothing left inside it.
+      const rule = skin.dim(`  ${RULE.repeat(Math.max(10, Math.min(width - 4, 70)))}`);
+      const flat: string[] = [];
+      for (const [index, section] of this.sections(width).entries()) {
+        if (index > 0) flat.push("", rule, "");
+        flat.push(...section);
+      }
+      flat.push("", hint);
+      while (flat.length < PANEL_HEIGHT) flat.push("");
+      return flat;
     }
 
-    lines.push("", keyHint(this.mode(), this.filter));
+    // The border carries the focus. pi has no focus styling of its own to copy — Focusable
+    // drives only cursor emission — but its session selector recolours its rules to say which
+    // panel is live, so recolouring the border is the least-invented answer available.
+    const border = this.focus === "list" && !this.isPage ? skin.accent : skin.dim;
+    const inner = innerWidth(width);
+    const lines: string[] = [frameTop(TITLE, width, border)];
+
+    for (const [index, section] of this.sections(inner).entries()) {
+      if (index > 0) lines.push(frameDivider(width, border));
+      for (const line of section) lines.push(frameRow(line, width, border));
+    }
+
+    lines.push(frameBottom(width, border));
+    // The hints sit outside the box: they describe how to drive the panel rather than being
+    // part of what it reports.
+    lines.push(hint);
     // A fixed height throughout: nothing below the list may shift when the cursor moves, the
     // filter changes, or a tab with fewer rows comes up.
     while (lines.length < PANEL_HEIGHT) lines.push("");
@@ -272,7 +323,7 @@ export class Panel {
 
 function showPanel(ctx: ExtensionCommandContext, inventory: Inventory, home: string): Promise<null> {
   const tabs = buildTabs(inventory.entries);
-  return ctx.ui.custom<null>((_tui, _theme, _keybindings, done) => {
+  return ctx.ui.custom<null>((_tui, theme, _keybindings, done) => {
     const onCopy = (path: string): void => {
       // Copying a path out is still read-only, and it is what anyone wants once they have found
       // the row they were looking for.
@@ -283,7 +334,12 @@ function showPanel(ctx: ExtensionCommandContext, inventory: Inventory, home: str
         () => ctx.ui.notify(path, "info"),
       );
     };
-    return new Panel(inventory, home, tabs, done, onCopy);
+    // The theme argument is a live proxy onto whatever theme is current, and pi invalidates
+    // mounted overlays when the user switches — so colouring through it inside render() tracks
+    // a theme change with no subscription. Registering with pi's onThemeChange would be worse
+    // than useless: it is a single global slot that interactive-mode already holds, and taking
+    // it would disable pi's own re-render for the rest of the session.
+    return new Panel(inventory, home, tabs, done, onCopy, skinFromTheme(theme));
   });
 }
 

@@ -127,3 +127,81 @@ it changes nothing. The scan reports the winner and counts what it overrode.
 A full scan of a real install — 11 packages, 38 entries across five kinds —
 takes about 25 ms. Fast enough that caching would be a liability rather than an
 optimisation.
+
+
+## Colour, width and framing
+
+Found by reading pi's source directly. Each of these replaced a guess that had
+already shipped.
+
+### The theme is a live proxy, and there are no raw colours
+
+`ctx.ui.custom((tui, theme, keybindings, done) => ...)` hands over an instance of
+pi's `Theme` class — in fact the module-level `Proxy`, which forwards every read
+to whatever theme is current. You colour by calling `theme.fg(role, text)` and
+`theme.bg(role, text)`, which return the string already wrapped in ANSI. There
+is no getter for a hex value: `getResolvedThemeColors()` exists but is not
+re-exported from the package root.
+
+46 foreground roles, 8 background roles. The ones a panel needs: `text`,
+`muted`, `dim`, `accent`, `warning`, `border`, `borderMuted`, and the background
+`selectedBg`.
+
+**There is no cursor role.** pi does selection as `bg("selectedBg")` across the
+whole padded row plus `fg("accent")` on a marker glyph, with the primary text
+bolded — that is session-selector and tree-selector verbatim. The lighter form,
+in `SelectList` and `SettingsList`, is an accent-coloured `"→ "` prefix and
+nothing else. Inventing an accent of our own was inventing a synonym.
+
+**There is no dim style.** `Theme` exposes bold/italic/underline/inverse/
+strikethrough but deliberately not SGR 2, because a real dim escape ignores the
+theme. Tertiary text goes through the `dim` colour *role*.
+
+**Never call `onThemeChange`.** It is a single global slot — an assignment, not
+a listener list — and interactive-mode already holds it. Registering there would
+silently disable pi's own re-render for the rest of the session. Nothing is
+needed anyway: the proxy is live and `TUI.invalidate()` reaches overlays, so
+colouring inside `render()` tracks a theme switch for free. The corollary is
+that colour strings must never be cached.
+
+`ThemeBg` is not exported from the package root, only `ThemeColor`, so
+`"selectedBg"` is written as a literal.
+
+### pi measures width properly, and exports it
+
+`@earendil-works/pi-tui` exports `visibleWidth`, `truncateToWidth`,
+`sliceByColumn`, `wrapTextWithAnsi` and `stripTerminalSequences` from its
+package root, and pi's own bundled extension examples import exactly these. It
+is grapheme-based (`Intl.Segmenter`) over `get-east-asian-width`, and handles
+CJK, RGI emoji including ZWJ sequences, combining marks and embedded ANSI.
+
+Two traps:
+
+- **A TAB is three cells** in pi's model, not one and not eight. Any hand-rolled
+  width arithmetic has to match or the frame drifts.
+- **`truncateToWidth` emits a full reset (`ESC[0m`) around its ellipsis.** A full
+  reset clears the background as well as the foreground, so a truncated string
+  inside a `bg("selectedBg")` row switches the fill off partway across and
+  leaves the rest unpainted. Invisible in a plain-text render. Uncoloured text is
+  cut with `sliceByColumn` instead, which emits nothing.
+
+`@earendil-works/pi-coding-agent` re-exports none of these; import from pi-tui.
+
+### pi has no frame component, and never draws four sides
+
+There is no Border, Frame or Panel component and no box-drawing helper. pi-tui's
+`Box` is padding and background only — it draws no border characters at all.
+
+pi's house style for a panel is `DynamicBorder`: one full-width `─` rule, used
+in pairs above and below a `Container`, in fifteen-plus components. The editor
+says so in a comment: "no side borders, just horizontal lines above and below".
+
+Character census over both packages: `─` 95, `│` 26, `├` 10, `└` 10, `┌` 3.
+Rounded corners `╭ ╮ ╰ ╯`, heavy lines `┏ ━ ┃` and double lines: **zero**. A
+four-sided box is ours to draw, but drawing it in the square set keeps it in
+pi's vocabulary; rounded corners would read as foreign on sight.
+
+**Focus has no visual language to copy.** `Focusable.focused` drives only cursor
+emission. The nearest in-house precedent is the session selector recolouring its
+own rules, so recolouring the border is the least-invented way to say which
+region is live.

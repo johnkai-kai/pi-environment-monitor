@@ -1,6 +1,8 @@
 import { KINDS, countByKind, countDisabled, type Entry, type Inventory, type Kind } from "./inventory.ts";
 import { shortenPath } from "./overview.ts";
 import { sanitizeText } from "./sanitize.ts";
+import type { Skin } from "./skin.ts";
+import { clip, padTo, visibleWidth } from "./width.ts";
 
 // Turning entries into rows. Pure: it touches neither pi nor pi-tui, so the layout the user
 // actually reads can be tested without a running agent.
@@ -17,13 +19,14 @@ export const DISABLED_MARK = "off";
 export interface Row {
   /** Stable identity, and what selecting the row hands back: the real path on disk. */
   value: string;
-  label: string;
+  /** The kind column, empty on a single-kind tab where it would repeat one word downwards. */
+  kindLabel: string;
+  /** The name, plus the disabled marker when there is one. */
+  name: string;
   description: string;
+  /** kindLabel and name joined - what the row reads as with no colour at all. */
+  label: string;
   entry: Entry;
-}
-
-function pad(text: string, width: number): string {
-  return text.length >= width ? text : text + " ".repeat(width - text.length);
 }
 
 /** Where the entry came from, in the fewest words that stay unambiguous. */
@@ -65,15 +68,18 @@ export interface RowOptions {
 export function buildRow(entry: Entry, options: RowOptions = {}): Row {
   const name = sanitizeText(entry.name);
   const flag = entry.enabled ? "" : `  [${DISABLED_MARK}]`;
-  const prefix = options.showKind === true ? `${pad(entry.kind, KIND_WIDTH)}  ` : "";
+  const kindLabel = options.showKind === true ? padTo(entry.kind, KIND_WIDTH) : "";
   const describe =
     entry.kind === "package" && options.context !== undefined
       ? contributionSummary(options.context, entry.source)
       : sourceLabel(entry);
+  const label = `${name}${flag}`;
   return {
     value: sanitizeText(entry.path),
-    label: `${prefix}${name}${flag}`,
+    kindLabel,
+    name: label,
     description: sanitizeText(describe),
+    label: kindLabel === "" ? label : `${kindLabel}  ${label}`,
     entry,
   };
 }
@@ -88,14 +94,16 @@ export function buildRows(entries: readonly Entry[], options: RowOptions = {}): 
  */
 export const DETAIL_LINES = 3;
 
-export function detailLines(entry: Entry | null, home: string): string[] {
+export function detailLines(entry: Entry | null, home: string, skin: Skin): string[] {
   const lines: string[] = [];
   if (entry !== null) {
-    lines.push(`  ${sanitizeText(shortenPath(entry.path, home))}`);
+    lines.push(skin.dim(`  ${sanitizeText(shortenPath(entry.path, home))}`));
     const shadows = entry.shadows ?? [];
     if (shadows.length > 0) {
-      lines.push(`  overrides ${shadows.length === 1 ? "a definition" : `${shadows.length} definitions`} in:`);
-      for (const path of shadows) lines.push(`    ${sanitizeText(shortenPath(path, home))}`);
+      lines.push(
+        skin.muted(`  overrides ${shadows.length === 1 ? "a definition" : `${shadows.length} definitions`} in:`),
+      );
+      for (const path of shadows) lines.push(skin.dim(`    ${sanitizeText(shortenPath(path, home))}`));
     }
   }
   // Always the same number of lines: a detail area that grows with the selected row would move
@@ -137,19 +145,29 @@ const CARET = "█";
  * uses — the first version only mentioned it in a footer hint, and the hint was for a filter
  * that did not work.
  */
-export function searchBox(filter: string, matches: number, total: number, width: number): string {
+export function searchBox(
+  filter: string,
+  matches: number,
+  total: number,
+  width: number,
+  skin: Skin,
+): string {
   const typed = sanitizeText(filter);
   const count = typed === "" ? `${total} item${total === 1 ? "" : "s"}` : `${matches} of ${total}`;
-  const left = `  search  ${typed}${CARET}`;
-  const gap = Math.max(2, width - left.length - count.length - 2);
-  return `${left}${" ".repeat(gap)}${count}`;
+  const label = "  search  ";
+  const room = Math.max(4, width - visibleWidth(label) - visibleWidth(count) - 3);
+  const entered = clip(typed, room);
+  const used = visibleWidth(label) + visibleWidth(entered) + 1;
+  const gap = Math.max(1, width - used - visibleWidth(count));
+  return `${skin.muted(label)}${skin.text(entered)}${skin.accent(CARET)}${" ".repeat(gap)}${skin.dim(count)}`;
 }
 
 /** Names the row the cursor is on, so "what am I looking at" never depends on colour. */
-export function selectionLine(entry: Entry | null): string {
-  if (entry === null) return "  nothing selected";
+export function selectionLine(entry: Entry | null, skin: Skin): string {
+  if (entry === null) return skin.dim("  nothing selected");
   const off = entry.enabled ? "" : `  [${DISABLED_MARK}]`;
-  return `  ▌ ${sanitizeText(entry.name)}${off}   ${entry.kind} · ${sanitizeText(sourceLabel(entry))}`;
+  const name = skin.bold(skin.text(`${sanitizeText(entry.name)}${off}`));
+  return `  ${name}   ${skin.muted(`${entry.kind} · ${sanitizeText(sourceLabel(entry))}`)}`;
 }
 
 const LIST_KEYS = "↑↓ move   home/end ends   ←→ tab   enter copy   esc close";
@@ -159,11 +177,21 @@ const PAGE_KEYS = "↑↓←→ tab   esc close";
 
 export type KeyHintMode = "list" | "packages" | "drill" | "page";
 
-export function keyHint(mode: KeyHintMode, filter: string): string {
+export function keyHint(mode: KeyHintMode, filter: string, skin: Skin): string {
   const keys =
     mode === "drill" ? DRILL_KEYS : mode === "packages" ? PACKAGE_KEYS : mode === "page" ? PAGE_KEYS : LIST_KEYS;
+  // pi renders every hint as a dim key followed by a muted description, so a key reads as a key
+  // rather than as prose. Same split here: the glyph dim, the words after it muted.
+  const painted = keys
+    .split("   ")
+    .map((pair) => {
+      const at = pair.indexOf(" ");
+      if (at === -1) return skin.dim(pair);
+      return skin.dim(pair.slice(0, at)) + skin.muted(pair.slice(at));
+    })
+    .join("   ");
   // The search box shows the filter now, so the hint only has to list keys.
-  return ` ${keys}`;
+  return ` ${painted}`;
 }
 
 export function errorLines(inventory: Inventory): string[] {

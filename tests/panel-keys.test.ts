@@ -2,8 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Entry, Inventory, Kind } from "../src/inventory.ts";
 import { Panel } from "../src/panel.ts";
-import { block, rest } from "../src/highlight.ts";
+import { plainSkin } from "../src/skin.ts";
 import { buildTabs } from "../src/tabs.ts";
+import { visibleWidth } from "../src/width.ts";
 
 // The bug this file exists for: the panel shipped comparing raw byte sequences ("\x1b[D" for
 // left, "\x1b" for escape). Real terminals also send the kitty keyboard protocol and
@@ -296,7 +297,7 @@ test("end on an empty result does not point past the list", () => {
   const h = harness();
   h.press(LEGACY.right, "z", "z", END);
   assert.equal(h.panel.selectedIndex, 0);
-  assert.equal(h.panel.render(120).includes("  nothing matches"), true);
+  assert.match(h.screen(), /nothing matches/);
 });
 
 test("the cursor row is marked in the list and named underneath it", () => {
@@ -304,7 +305,9 @@ test("the cursor row is marked in the list and named underneath it", () => {
   h.press(LEGACY.right, LEGACY.down, LEGACY.down);
   const screen = h.screen();
   assert.match(screen, /▌ .*beta/);
-  assert.match(screen, /▌ beta {3}skill · user/);
+  // Named underneath, but without a second marker: the detail block repeating the cursor glyph
+  // was the "two selections" bug in another costume.
+  assert.match(screen, /beta {3}skill · user/);
 });
 
 // The panel jumping height as the filter narrowed the list moved everything under it.
@@ -330,34 +333,64 @@ test("opening a package does not change the height either", () => {
   assert.equal(h.panel.render(120).length, before);
 });
 
-// Both marks were orange, so the row the cursor had left behind read as a second selection: the
-// tab strip said "All" was picked and the first row said the same thing, in the same colour.
-// One bright mark on screen, always, or the panel is telling you two places at once.
-const BRIGHT = block("").replace("\x1b[0m", "");
-const BANKED = rest("").replace("\x1b[0m", "");
+// Two marks that looked alike read as two selections: the tab strip said "All" was picked and
+// the first row said the same thing, in the same colour. Exactly one place may claim to be live.
+//
+// The invariant is the MARKER, not the accent role. The focused border is accent too, on
+// purpose — a rule and a marker are different shapes and say different things — so counting
+// uses of the role would forbid a decision that was made deliberately.
+const CURSOR_MARK = "▌";
 
 function occurrences(screen: string, needle: string): number {
   return screen.split(needle).length - 1;
 }
 
-test("exactly one bright cursor is on screen, wherever it is", () => {
+test("exactly one cursor marker is on screen, wherever the cursor is", () => {
   const h = harness();
   for (const keys of [[], [LEGACY.right], [LEGACY.down], [LEGACY.down, LEGACY.down], [LEGACY.up]]) {
     h.press(...keys);
-    assert.equal(occurrences(h.screen(), BRIGHT), 1, `after ${keys.length} keys`);
+    assert.equal(occurrences(h.screen(), CURSOR_MARK), 1, `after pressing ${keys.length} more keys`);
   }
 });
 
-test("the row you left behind is marked, but not as brightly as where you are", () => {
+// A skin that marks instead of colouring, so the assertion is about which element got the
+// treatment rather than about an escape sequence.
+test("the place you left behind keeps a mark, but not the live one", () => {
   const h = harness();
+  h.panel.skin = { ...plainSkin(), fill: (text) => `<rest>${text}` };
+
   h.press(LEGACY.right, LEGACY.down, LEGACY.down);
   const inList = h.screen();
-  assert.equal(occurrences(inList, BRIGHT), 1);
-  assert.equal(occurrences(inList, BANKED), 1, "the active tab keeps a banked mark");
+  assert.equal(occurrences(inList, CURSOR_MARK), 1, "the cursor is in the list");
+  assert.ok(inList.includes("<rest>"), "the active tab keeps a resting fill");
 
   h.press(LEGACY.up, LEGACY.up);
   const onTabs = h.screen();
-  assert.equal(occurrences(onTabs, BRIGHT), 1);
-  assert.equal(occurrences(onTabs, BANKED), 1, "the list keeps a banked mark");
-  assert.notEqual(BRIGHT, BANKED);
+  assert.equal(occurrences(onTabs, CURSOR_MARK), 1, "the cursor is on the tabs");
+  assert.ok(onTabs.includes("<rest>"), "the list keeps a resting fill");
+});
+
+// The border is the one piece of UI where being a single cell out shows on every row, and the
+// paths on a real install contain CJK, which String.length measures short.
+test("every line is exactly the width it was asked for, at any width", () => {
+  const h = harness();
+  for (const width of [40, 60, 96, 120, 200]) {
+    h.press(LEGACY.right, LEGACY.down);
+    for (const line of h.panel.render(width)) {
+      const measured = visibleWidth(line);
+      assert.ok(measured <= width, `a line measured ${measured} at width ${width}: ${JSON.stringify(line)}`);
+    }
+  }
+});
+
+test("the frame closes on every side, and every framed line reaches both borders", () => {
+  const h = harness();
+  h.press(LEGACY.right, LEGACY.down);
+  const width = 96;
+  const lines = h.panel.render(width).filter((line) => line.startsWith("┌") || line.startsWith("│") || line.startsWith("├") || line.startsWith("└"));
+  assert.ok(lines.length > 5, "expected a framed panel");
+  for (const line of lines) {
+    assert.equal(visibleWidth(line), width, `frame line is not ${width} cells: ${JSON.stringify(line)}`);
+    assert.match(line, /[┐│┤┘]$/, `frame line does not close: ${JSON.stringify(line)}`);
+  }
 });
