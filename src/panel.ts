@@ -2,14 +2,14 @@ import { homedir } from "node:os";
 import {
   copyToClipboard,
   getAgentDir,
-  getSelectListTheme,
   type ExtensionAPI,
   type ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { SelectList } from "@earendil-works/pi-tui";
+import { matchesKey } from "@earendil-works/pi-tui";
 import { collectInventory } from "./collect/resources.ts";
 import { debugLogPath, writeDebug } from "./debug.ts";
 import type { Entry, Inventory } from "./inventory.ts";
+import { moveSelection, renderList } from "./list-view.ts";
 import { overviewLines } from "./overview.ts";
 import {
   buildRows,
@@ -17,31 +17,32 @@ import {
   errorLines,
   filterEntries,
   keyHint,
-  primaryColumnWidth,
+  searchBox,
+  selectionLine,
   textReport,
   type KeyHintMode,
+  type Row,
 } from "./rows.ts";
 import { buildTabs, entriesForTab, renderTabBar, stepTab, tabShowsKindColumn, type Tab } from "./tabs.ts";
 
 const COMMANDS = ["pi-env", "pi-environment-monitor"] as const;
-const MAX_VISIBLE = 14;
-
+const VISIBLE_ROWS = 12;
 const PRINTABLE = /^[\x20-\x7e]$/;
-const BACKSPACE = new Set(["\x7f", "\b"]);
-const LEFT = new Set(["\x1b[D", "\x1bOD"]);
-const RIGHT = new Set(["\x1b[C", "\x1bOC"]);
-const ESCAPE = "\x1b";
 const RULE = "─";
 
-// The panel renders itself rather than delegating to a Container. Two reasons: the tab strip has
-// to be laid out against the render-time width, which a pre-built child cannot see; and Container
-// has no handleInput, so anything built on one has to hand-forward every key anyway.
+// Keys go through pi-tui's matchesKey, never raw byte comparison.
+//
+// The first version compared against "\x1b[D" and "\x1b" directly. That misses the kitty
+// keyboard protocol and modifyOtherKeys encodings, which is what a real terminal actually sends,
+// so no arrow and no escape ever matched. The panel opens on Overview — the one tab with no list
+// to fall through to — and every key was swallowed there: no tab switching, no exit, nothing.
+// It looked like a hang. matchesKey knows all three encodings.
 //
 // Do not use TypeScript parameter properties here (constructor(private readonly x)). Node's
 // --experimental-strip-types cannot parse them and the module explodes at load, while
 // tsc --noEmit says nothing. tests/loadable.test.ts is the guard.
 //
-// Exported so scripts/render-panel.mjs can render it at any width with no terminal attached.
+// Exported so scripts/render-panel.mjs can drive it at any width with no terminal attached.
 export class Panel {
   readonly inventory: Inventory;
   readonly home: string;
@@ -51,11 +52,9 @@ export class Panel {
 
   activeIndex = 0;
   filter = "";
+  selectedIndex = 0;
   /** The package being looked inside, or null at the top level. */
   drilledInto: Entry | null = null;
-  list: SelectList | null = null;
-  /** The column layout depends on terminal width, which is only known at render time. */
-  lastWidth = 120;
 
   constructor(
     inventory: Inventory,
@@ -69,14 +68,17 @@ export class Panel {
     this.tabs = tabs;
     this.done = done;
     this.onCopy = onCopy;
-    this.rebuild();
   }
 
   private get activeTab(): Tab {
     return this.tabs[this.activeIndex] as Tab;
   }
 
-  /** Entries the current view is showing, before filtering. */
+  private get isPage(): boolean {
+    return this.activeTab.id === "overview";
+  }
+
+  /** Entries this view shows, before filtering. */
   private baseEntries(): Entry[] {
     const drilled = this.drilledInto;
     if (drilled !== null) {
@@ -87,56 +89,36 @@ export class Panel {
     return entriesForTab(this.activeTab, this.inventory.entries);
   }
 
+  private visibleEntries(): Entry[] {
+    return filterEntries(this.baseEntries(), this.filter);
+  }
+
+  private visibleRows(): Row[] {
+    const showKind = this.drilledInto !== null || tabShowsKindColumn(this.activeTab);
+    return buildRows(this.visibleEntries(), { showKind, context: this.inventory.entries });
+  }
+
+  private selectedEntry(): Entry | null {
+    return this.visibleEntries()[this.selectedIndex] ?? null;
+  }
+
   private mode(): KeyHintMode {
-    if (this.activeTab.id === "overview") return "page";
+    if (this.isPage) return "page";
     if (this.drilledInto !== null) return "drill";
     return this.activeTab.id === "packages" ? "packages" : "list";
   }
 
-  /** SelectList has no setItems, so a changed view means a new list. */
-  private rebuild(): void {
-    if (this.activeTab.id === "overview") {
-      this.list = null;
-      return;
-    }
-    // Inside a package the rows are a mix of kinds, so the column earns its space again.
-    const showKind = this.drilledInto !== null || tabShowsKindColumn(this.activeTab);
-    const entries = filterEntries(this.baseEntries(), this.filter);
-    const rows = buildRows(entries, { showKind, context: this.inventory.entries });
-    const items = rows.map((row) => ({
-      value: row.value,
-      label: row.label,
-      description: row.description,
-    }));
-
-    // Sized to the longest name instead of pi-tui's fixed 32 columns, which truncated names to
-    // the point where two different packages read identically.
-    const column = primaryColumnWidth(rows, this.lastWidth);
-    const list = new SelectList(items, MAX_VISIBLE, getSelectListTheme(), {
-      minPrimaryColumnWidth: column,
-      maxPrimaryColumnWidth: column,
-    });
-    list.onCancel = (): void => this.goBack();
-    list.onSelect = (item): void => this.confirm(item.value);
-    this.list = list;
-  }
-
-  private selectedEntry(): Entry | null {
-    const value = this.list?.getSelectedItem()?.value;
-    if (value === undefined) return null;
-    return filterEntries(this.baseEntries(), this.filter).find((entry) => entry.path === value) ?? null;
-  }
-
-  private confirm(path: string): void {
+  private confirm(): void {
     const entry = this.selectedEntry();
-    // On the Packages tab, Enter means "show me what is in this box" rather than "copy the box".
-    if (this.activeTab.id === "packages" && this.drilledInto === null && entry !== null) {
+    if (entry === null) return;
+    // On the Packages tab, Enter means "show me what is in this box", not "copy the box".
+    if (this.activeTab.id === "packages" && this.drilledInto === null) {
       this.drilledInto = entry;
       this.filter = "";
-      this.rebuild();
+      this.selectedIndex = 0;
       return;
     }
-    this.onCopy(path);
+    this.onCopy(entry.path);
     this.done(null);
   }
 
@@ -144,7 +126,7 @@ export class Panel {
     if (this.drilledInto !== null) {
       this.drilledInto = null;
       this.filter = "";
-      this.rebuild();
+      this.selectedIndex = 0;
       return;
     }
     this.done(null);
@@ -153,57 +135,69 @@ export class Panel {
   private switchTab(delta: number): void {
     this.activeIndex = stepTab(this.tabs, this.activeIndex, delta);
     this.drilledInto = null;
-    // A filter typed for one tab means nothing on the next, and carrying it over looks like an
-    // empty tab rather than a filtered one.
+    // A filter typed for one tab means nothing on the next, and carrying it over would look
+    // like an empty tab rather than a filtered one.
     this.filter = "";
-    this.rebuild();
+    this.selectedIndex = 0;
   }
 
   handleInput(data: string): void {
-    // Switching tabs is available everywhere, including from inside a package.
-    if (LEFT.has(data)) return this.switchTab(-1);
-    if (RIGHT.has(data)) return this.switchTab(1);
+    // Tab switching and exit work everywhere, including the Overview page and inside a package.
+    if (matchesKey(data, "left")) return this.switchTab(-1);
+    if (matchesKey(data, "right")) return this.switchTab(1);
+    if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) return this.goBack();
 
-    if (this.list === null) {
-      if (data === ESCAPE) this.done(null);
+    if (this.isPage) return;
+
+    const total = this.visibleEntries().length;
+    if (matchesKey(data, "up")) {
+      this.selectedIndex = moveSelection(total, this.selectedIndex, -1);
       return;
     }
-
-    if (BACKSPACE.has(data)) {
+    if (matchesKey(data, "down")) {
+      this.selectedIndex = moveSelection(total, this.selectedIndex, 1);
+      return;
+    }
+    if (matchesKey(data, "pageUp")) {
+      this.selectedIndex = moveSelection(total, this.selectedIndex, -VISIBLE_ROWS);
+      return;
+    }
+    if (matchesKey(data, "pageDown")) {
+      this.selectedIndex = moveSelection(total, this.selectedIndex, VISIBLE_ROWS);
+      return;
+    }
+    if (matchesKey(data, "enter")) return this.confirm();
+    if (matchesKey(data, "backspace")) {
       if (this.filter !== "") {
         this.filter = this.filter.slice(0, -1);
-        this.rebuild();
+        this.selectedIndex = 0;
       }
       return;
     }
-    if (PRINTABLE.test(data)) {
+    // Whatever is left, if it is a single printable character, is search input.
+    if (data.length === 1 && PRINTABLE.test(data)) {
       this.filter += data;
-      this.rebuild();
-      return;
+      this.selectedIndex = 0;
     }
-    this.list.handleInput(data);
   }
 
-  invalidate(): void {
-    this.list?.invalidate();
-  }
+  invalidate(): void {}
 
   render(width: number): string[] {
-    if (width !== this.lastWidth) {
-      this.lastWidth = width;
-      this.rebuild();
-    }
+    const rule = `  ${RULE.repeat(Math.max(10, Math.min(width - 4, 70)))}`;
     const lines: string[] = [renderTabBar(this.tabs, this.activeIndex, width), ""];
 
     const drilled = this.drilledInto;
     if (drilled !== null) lines.push(`  ‹ Packages / ${drilled.name} ›`, "");
 
-    if (this.list === null) {
+    if (this.isPage) {
       lines.push(...overviewLines(this.inventory, width, this.home));
     } else {
-      const body = this.list.render(width);
-      lines.push(...(body.length > 0 ? body : ["  nothing matches that filter"]));
-      lines.push(`  ${RULE.repeat(Math.max(10, Math.min(width - 4, 70)))}`);
+      const rows = this.visibleRows();
+      lines.push(searchBox(this.filter, rows.length, this.baseEntries().length, width), "");
+      lines.push(...renderList(rows, { selectedIndex: this.selectedIndex, height: VISIBLE_ROWS, width }));
+      lines.push(rule);
+      lines.push(selectionLine(this.selectedEntry()));
       lines.push(...detailLines(this.selectedEntry(), this.home));
     }
 

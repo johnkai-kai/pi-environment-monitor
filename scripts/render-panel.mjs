@@ -15,11 +15,6 @@ const width = Number(process.argv[3] ?? 120);
 const script = process.argv[4] ?? "";
 const load = (rel) => import(pathToFileURL(join(root, rel)).href);
 
-// A real pi session has already initialised the theme before an extension command runs; a bare
-// node process has not, and getSelectListTheme() throws without it.
-const { initTheme } = await import("@earendil-works/pi-coding-agent");
-initTheme();
-
 const { collectInventory } = await load("src/collect/resources.ts");
 const { Panel } = await load("src/panel.ts");
 const { buildTabs } = await load("src/tabs.ts");

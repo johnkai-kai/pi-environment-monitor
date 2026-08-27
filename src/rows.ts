@@ -83,20 +83,6 @@ export function buildRows(entries: readonly Entry[], options: RowOptions = {}): 
 }
 
 /**
- * How wide the name column has to be for nothing to be truncated.
- *
- * pi-tui defaults this to a fixed 32 columns, which cut `pi-statusline-hud-setup` down to
- * `pi-statusline-hud-s` — indistinguishable from `pi-statusline-hud` right above it. Names are
- * the primary key of the list, so they get the space and the description gives it up. The cap
- * keeps the description from being squeezed out entirely on a narrow terminal.
- */
-export function primaryColumnWidth(rows: readonly Row[], width: number): number {
-  const widest = rows.reduce((max, row) => Math.max(max, row.label.length), 0);
-  const cap = Math.max(20, Math.floor(width * 0.55));
-  return Math.min(widest + 2, cap);
-}
-
-/**
  * The detail line for the cursor row. This is where the path lives now, so it gets the full
  * width and never competes with a column.
  */
@@ -137,7 +123,29 @@ export function summaryLine(entries: readonly Entry[]): string {
   return `${parts.join("  ·  ")}${off > 0 ? `  ·  ${off} disabled` : ""}`;
 }
 
-const LIST_KEYS = "↑↓ move   ←→ tab   enter copy path   esc close";
+const CARET = "█";
+
+/**
+ * The search box. Drawn even when empty, because a filter nobody can see is a filter nobody
+ * uses — the first version only mentioned it in a footer hint, and the hint was for a filter
+ * that did not work.
+ */
+export function searchBox(filter: string, matches: number, total: number, width: number): string {
+  const typed = sanitizeText(filter);
+  const count = typed === "" ? `${total} item${total === 1 ? "" : "s"}` : `${matches} of ${total}`;
+  const left = `  search  ${typed}${CARET}`;
+  const gap = Math.max(2, width - left.length - count.length - 2);
+  return `${left}${" ".repeat(gap)}${count}`;
+}
+
+/** Names the row the cursor is on, so "what am I looking at" never depends on colour. */
+export function selectionLine(entry: Entry | null): string {
+  if (entry === null) return "  nothing selected";
+  const off = entry.enabled ? "" : `  [${DISABLED_MARK}]`;
+  return `  ▌ ${sanitizeText(entry.name)}${off}   ${entry.kind} · ${sanitizeText(sourceLabel(entry))}`;
+}
+
+const LIST_KEYS = "↑↓ move   ←→ tab   enter copy   esc close";
 const DRILL_KEYS = "↑↓ move   enter copy path   esc back";
 const PACKAGE_KEYS = "↑↓ move   ←→ tab   enter open package   esc close";
 const PAGE_KEYS = "←→ tab   esc close";
@@ -147,10 +155,8 @@ export type KeyHintMode = "list" | "packages" | "drill" | "page";
 export function keyHint(mode: KeyHintMode, filter: string): string {
   const keys =
     mode === "drill" ? DRILL_KEYS : mode === "packages" ? PACKAGE_KEYS : mode === "page" ? PAGE_KEYS : LIST_KEYS;
-  if (mode === "page") return ` ${keys}`;
-  const typed = sanitizeText(filter);
-  const lead = typed === "" ? "type to filter" : `filter: ${typed}`;
-  return ` ${lead}   ${keys}`;
+  // The search box shows the filter now, so the hint only has to list keys.
+  return ` ${keys}`;
 }
 
 export function errorLines(inventory: Inventory): string[] {

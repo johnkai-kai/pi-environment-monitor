@@ -14,7 +14,8 @@ import {
   filterEntries,
   keyHint,
   matchesFilter,
-  primaryColumnWidth,
+  searchBox,
+  selectionLine,
   sourceLabel,
   summaryLine,
   textReport,
@@ -122,13 +123,35 @@ test("terminal escape sequences never reach a row or a detail line", () => {
   assert.ok(row.label.includes("evil"));
 });
 
-test("the key hint says what the keys do, and what is being filtered", () => {
-  assert.match(keyHint("list", ""), /type to filter/);
-  assert.match(keyHint("list", "tele"), /filter: tele/);
+test("the key hint lists the keys for the view you are in", () => {
+  assert.match(keyHint("list", ""), /↑↓ move/);
   assert.match(keyHint("packages", ""), /enter open package/);
   assert.match(keyHint("drill", ""), /esc back/);
-  // The Overview page has no list to filter, so offering a filter there would be a lie.
-  assert.ok(!keyHint("page", "").includes("filter"));
+  // The Overview page has no list, so offering move keys there would be a lie.
+  assert.ok(!keyHint("page", "").includes("↑↓"));
+});
+
+// A filter mentioned only in a footer hint is a filter nobody finds — and in the first version
+// that hint advertised one that did not work at all.
+test("the search box is drawn whether or not anything is typed", () => {
+  assert.match(searchBox("", 12, 12, 80), /search/);
+  assert.match(searchBox("", 12, 12, 80), /12 items/);
+  assert.match(searchBox("tele", 4, 12, 80), /search {2}tele/);
+  assert.match(searchBox("tele", 4, 12, 80), /4 of 12/);
+  assert.match(searchBox("", 1, 1, 80), /1 item$/);
+});
+
+test("the search box fits the width it is given", () => {
+  for (const width of [40, 80, 200]) {
+    assert.ok(searchBox("abc", 2, 9, width).length <= width, `too wide at ${width}`);
+  }
+});
+
+test("the selection line names what the cursor is on, without relying on colour", () => {
+  assert.match(selectionLine(entry({ name: "herdr" })), /▌ herdr/);
+  assert.match(selectionLine(entry({ name: "herdr" })), /skill · user/);
+  assert.match(selectionLine(entry({ enabled: false })), /\[off\]/);
+  assert.equal(selectionLine(null), "  nothing selected");
 });
 
 test("the summary names every kind present and the disabled total", () => {
@@ -195,19 +218,6 @@ test("without context a package row falls back to its scope instead of lying", (
   assert.equal(buildRow(pkg).description, "user");
 });
 
-// pi-tui defaults the name column to a fixed 32, which cut pi-statusline-hud-setup down to
-// pi-statusline-hud-s — indistinguishable from pi-statusline-hud on the row above.
-test("the name column is sized to the longest name, so nothing is truncated", () => {
-  const rows = [buildRow(entry({ name: "pi-statusline-hud-setup" })), buildRow(entry({ name: "x" }))];
-  assert.ok(primaryColumnWidth(rows, 200) >= "pi-statusline-hud-setup".length);
-});
-
-test("the name column never eats the whole terminal", () => {
-  const rows = [buildRow(entry({ name: "n".repeat(300) }))];
-  assert.ok(primaryColumnWidth(rows, 100) <= 55);
-  // Even absurdly narrow terminals leave something for a name.
-  assert.ok(primaryColumnWidth(rows, 10) >= 20);
-});
 
 test("a built-in says it came with pi rather than showing a scope nobody asked about", () => {
   assert.equal(sourceLabel(entry({ kind: "theme", scope: "builtin", source: "builtin" })), "built into pi");
