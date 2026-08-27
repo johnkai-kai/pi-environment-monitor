@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Entry, Inventory, Kind } from "../src/inventory.ts";
 import { Panel } from "../src/panel.ts";
+import { block, rest } from "../src/highlight.ts";
 import { buildTabs } from "../src/tabs.ts";
 
 // The bug this file exists for: the panel shipped comparing raw byte sequences ("\x1b[D" for
@@ -327,4 +328,36 @@ test("opening a package does not change the height either", () => {
   const before = h.panel.render(120).length;
   h.press(LEGACY.left, ENTER, ENTER);
   assert.equal(h.panel.render(120).length, before);
+});
+
+// Both marks were orange, so the row the cursor had left behind read as a second selection: the
+// tab strip said "All" was picked and the first row said the same thing, in the same colour.
+// One bright mark on screen, always, or the panel is telling you two places at once.
+const BRIGHT = block("").replace("\x1b[0m", "");
+const BANKED = rest("").replace("\x1b[0m", "");
+
+function occurrences(screen: string, needle: string): number {
+  return screen.split(needle).length - 1;
+}
+
+test("exactly one bright cursor is on screen, wherever it is", () => {
+  const h = harness();
+  for (const keys of [[], [LEGACY.right], [LEGACY.down], [LEGACY.down, LEGACY.down], [LEGACY.up]]) {
+    h.press(...keys);
+    assert.equal(occurrences(h.screen(), BRIGHT), 1, `after ${keys.length} keys`);
+  }
+});
+
+test("the row you left behind is marked, but not as brightly as where you are", () => {
+  const h = harness();
+  h.press(LEGACY.right, LEGACY.down, LEGACY.down);
+  const inList = h.screen();
+  assert.equal(occurrences(inList, BRIGHT), 1);
+  assert.equal(occurrences(inList, BANKED), 1, "the active tab keeps a banked mark");
+
+  h.press(LEGACY.up, LEGACY.up);
+  const onTabs = h.screen();
+  assert.equal(occurrences(onTabs, BRIGHT), 1);
+  assert.equal(occurrences(onTabs, BANKED), 1, "the list keeps a banked mark");
+  assert.notEqual(BRIGHT, BANKED);
 });

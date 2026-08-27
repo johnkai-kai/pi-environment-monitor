@@ -11,29 +11,36 @@
 const LIGHT_ORANGE = "255;186;114";
 const INK = "24;20;16";
 
+// The resting mark is the same hue burnt down almost to the background. Colour alone cannot
+// separate "here" from "where you left off" — two oranges on screen read as two selections — so
+// the two differ in brightness, which the eye ranks before it compares hue.
+const EMBER = "62;48;36";
+const ASH = "150;134;120";
+
 const BLOCK = `\x1b[48;2;${LIGHT_ORANGE}m\x1b[38;2;${INK}m`;
-const DIM = `\x1b[38;2;${LIGHT_ORANGE}m`;
+const REST = `\x1b[48;2;${EMBER}m\x1b[38;2;${ASH}m`;
 const RESET = "\x1b[0m";
 
-/** Where the cursor actually is. Only one of these is painted solid at any moment. */
+/** Where the cursor actually is. Only one of these is painted bright at any moment. */
 export type Focus = "tabs" | "list";
 
-/** The solid block: this is where you are. */
+/** The bright block: this is where you are. */
 export function block(text: string): string {
   return `${BLOCK}${text}${RESET}`;
 }
 
 /**
- * The outline: this is where you would land.
+ * The banked block: this is where you would land, not where you are.
  *
  * The list keeps a marked row while the cursor is up on the tab strip, because losing it would
- * mean forgetting your place every time you looked at the tabs.
+ * mean forgetting your place every time you looked at the tabs — but it has to lose the argument
+ * about which mark is live, so it keeps the shape and gives up the brightness.
  */
-export function ghost(text: string): string {
-  return `${DIM}${text}${RESET}`;
+export function rest(text: string): string {
+  return `${REST}${text}${RESET}`;
 }
 
-/** Solid when this half of the panel holds the cursor, outlined when it does not. */
+/** Bright when this half of the panel holds the cursor, banked when it does not. */
 export function cursorPaint(hasCursor: boolean): (text: string) => string {
-  return hasCursor ? block : ghost;
+  return hasCursor ? block : rest;
 }
