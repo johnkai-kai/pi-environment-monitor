@@ -1,8 +1,51 @@
 # pi-environment-monitor
 
-An on-demand inventory panel for the [pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent).
+An inventory panel for the [pi](https://github.com/earendil-works/pi) coding agent.
+What is installed, and where does it actually live?
 
-**What is installed, and where does it actually live?**
+```
+ Overview │ All 31 │[skill 12]│ ext 13 │ mcp 2 │ theme 4 │ prompt 0 ║ Packages 12
+
+  search  hud█                                                            2 of 12
+
+▌ pi-statusline-hud        package git:github.com/johnkai-kai/pi-statusline-hud
+  pi-statusline-hud-setup  package git:github.com/johnkai-kai/pi-statusline-hud
+  ──────────────────────────────────────────────────────────────────────
+  ▌ pi-statusline-hud   skill · package git:github.com/johnkai-kai/pi-statusline-hud
+  ~/.pi/agent/git/github.com/johnkai-kai/pi-statusline-hud/skills/pi-statusline-hud/SKILL.md
+```
+
+## Install
+
+```bash
+pi install git:github.com/johnkai-kai/pi-environment-monitor
+```
+
+Restart pi afterwards, then run `/pi-env`.
+
+Installing writes no files of its own, and neither does the panel: it reads
+your install and never modifies it. To try it for a single session without
+installing anything, use `pi -e git:github.com/johnkai-kai/pi-environment-monitor`.
+
+## Update
+
+`git:` sources are not updated automatically.
+
+```bash
+pi update --extensions                                       # every package at once
+pi update git:github.com/johnkai-kai/pi-environment-monitor  # just this one
+```
+
+Restart pi afterwards.
+
+## Uninstall
+
+```bash
+pi remove git:github.com/johnkai-kai/pi-environment-monitor
+```
+
+Nothing is left behind. The package stores no settings and writes no state, so
+there is no file to clean up.
 
 ## Why
 
@@ -16,67 +59,66 @@ from.
 third-party package, and extensions never appear in it because they cost no
 tokens.
 
-## What it does
+## Keys
 
-Run `/pi-env` (or `/pi-environment-monitor`). Every installed skill, extension,
-MCP server, package, theme and prompt template, each with:
+One cursor moves through the whole panel — a light-orange block that is always
+on whatever the next key acts on.
 
-- its **absolute path on disk**
-- whether it is **currently disabled**
-- which **scope or package** put it there
+| Key | Action |
+| --- | --- |
+| `←` `→` | Move along the tabs |
+| `↓` | Drop from the tabs into the list |
+| `↑` | Move up; off the top row, back to the tabs |
+| `Home` `End` `PgUp` `PgDn` | Jump within the list |
+| type | Search the current tab |
+| `Enter` | On the tabs, enter the list. On a row, copy its path. On a package, open it |
+| `Esc` | Leave a package, or close the panel |
 
-Type to filter. `enter` copies the selected path to the clipboard. `esc` closes.
+## The tabs
 
-Read-only: it never writes to your pi install. Turning things on and off is a
-later phase.
+Everything left of the divider is a thing pi loaded. `Packages` past it is the
+boxes those things arrived in — so `All` counts the contents rather than every
+row, and counting boxes together with their contents no longer misleads.
 
-```
-11 skill  ·  12 extension  ·  2 mcp  ·  11 package  ·  2 theme
+- **Overview** — counts, and the conditions that stop an installed thing from
+  working: an untrusted project, a name defined twice, a package configured but
+  missing, MCP config files with nothing reading them.
+- **skill / ext / mcp / theme / prompt** — one kind each, with its path, its
+  scope, and whether it is disabled. An empty tab means "none installed", not
+  "unsupported".
+- **Packages** — what each package actually contributed. `Enter` opens one.
 
-  skill      telegram-bridge
-             …/npm/node_modules/@llblab/pi-telegram/skills/telegram-bridge/SKILL.md  ·  package npm:@llblab/pi-telegram
-→ mcp        mylifenote
-             ~/.pi/agent/mcp.json  ·  user  ·  overrides 1 other definition
-  extension  pi-btw
-             …/npm/node_modules/@narumitw/pi-btw/dist/index.ts  ·  package npm:@narumitw/pi-btw
-```
+`mcp` appears only when a server is found, because pi has no MCP support of its
+own; see below.
 
-That `overrides 1 other definition` is the kind of thing this exists for: the
-server is defined in two config files, and only the later one is live. Editing
-the other one looks like it does nothing.
+## Notes
 
-## Install
+**pi has no MCP.** Servers come from a third-party extension — on the machine
+this was built against, `pi-mcp-adapter`. So `mcp.json`'s location, format and
+read order are that adapter's conventions, not pi's, and without it the file
+does nothing. The Overview names whichever package reads them.
 
-```sh
-pi install git:github.com/johnkai-kai/pi-environment-monitor
-```
+**Built-in themes are included.** pi ships `dark` and `light`, and neither
+`PackageManager.resolve()` nor `ResourceLoader.getThemes()` returns them, so
+counting only installed themes says "2" to someone who can choose from four.
 
-To try it for one session without installing anything:
+**Project trust matters.** pi loads `.pi/` resources and ancestor
+`.agents/skills` only for a trusted project, and does not read project settings
+otherwise. The Overview says so in capitals when it applies.
 
-```sh
-pi -e git:github.com/johnkai-kai/pi-environment-monitor
-```
-
-## How it works
-
-pi's own `PackageManager.resolve()` already returns every skill, extension,
-prompt and theme with an absolute path, an `enabled` flag and the scope that
-contributed it — so this package asks pi rather than re-deriving pi's rules,
-and cannot drift out of step with them. It passes `onMissing: "skip"` so the
-call never installs anything.
-
-MCP servers are the exception: pi exposes no API for them, so their config
-files are read directly. Details and the full findings are in
-[docs/pi-api-findings.md](docs/pi-api-findings.md).
+Findings behind all three are in [docs/pi-api-findings.md](docs/pi-api-findings.md).
 
 ## Development
 
-```sh
+```bash
 npm install --no-save --ignore-scripts typescript @types/node \
   @earendil-works/pi-coding-agent @earendil-works/pi-tui
 npm test          # node --test over tests/*.test.ts
 npx tsc --noEmit  # type check
 node scripts/scan-secrets.mjs
+
+node scripts/render-panel.mjs . 120 right,down,type:hud   # render any view, no terminal
+node scripts/audit.mjs                                    # cross-check against pi's own loader
 ```
 
 pi loads extensions through Node's `--experimental-strip-types`, which strips
@@ -88,7 +130,7 @@ Set `PI_ENV_MONITOR_DEBUG=1` to log panel exceptions to
 `<agentDir>/pi-environment-monitor.log`. Off by default; it never touches the
 disk unless set.
 
-## Credits
+## Thanks
 
 Conventions, the strip-only loadability guard, the text sanitiser and the MCP
 discovery rules come from
@@ -98,4 +140,4 @@ and what was not.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT — see `LICENSE`.
