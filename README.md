@@ -32,7 +32,7 @@ for project overrides), then restart pi. The inventory panel itself is read-only
 pi install git:github.com/johnkai-kai/pi-environment-monitor
 ```
 
-Restart pi afterwards, then run `/pi-env`.
+Restart pi afterwards, then run `/pi-environment-monitor`.
 
 Installing writes no files of its own, and neither does the panel: it reads
 your install and never modifies it. To try it for a single session without

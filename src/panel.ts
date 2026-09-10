@@ -29,7 +29,7 @@ import {
 } from "./rows.ts";
 import { buildTabs, entriesForTab, renderTabBar, stepTab, tabShowsKindColumn, type Tab } from "./tabs.ts";
 
-const COMMANDS = ["pi-env", "pi-environment-monitor"] as const;
+const COMMANDS = ["pi-environment-monitor"] as const;
 const VISIBLE_ROWS = 12;
 // Every view pads to this, so the panel never changes height — not when the cursor moves, not
 // when a filter narrows the list, and not when switching between the Overview page and a tab.

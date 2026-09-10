@@ -1,42 +1,27 @@
 ---
 name: pi-environment-monitor
-description: Use when the user asks what skills, extensions, MCP servers, packages, themes or prompt templates pi has loaded, where any of them live on disk, why something they installed is not working, or why editing a config file changed nothing.
+description: Explain pi's configured resource inventory, resource paths, disabled entries and package contributions. Use when the user asks what is installed, where it lives, or why an installed resource is missing. This skill does not toggle resources or measure runtime health.
 ---
 
-# pi-environment-monitor
+# Environment inventory
 
-Answers "what is installed, and where does it actually live?"
+Run `/pi-environment-monitor` in an interactive pi session. This is the only command name.
 
-Tell the user to run **`/pi-env`** (long form `/pi-environment-monitor`). It
-opens a panel listing every installed skill, extension, MCP server, package,
-theme and prompt template, each with its absolute path, whether it is disabled,
-and which scope or package contributed it.
+The extension draws the panel. This skill explains when to use it and how to interpret it; the panel works without the skill.
 
-Keys: type to filter, `enter` copies the selected path, `esc` closes.
+## Read the panel
 
-## When this is the answer
+- Overview shows configured resources, package contributions, project trust and collection errors.
+- Arrow keys move between tabs and rows. Typing filters the selected tab.
+- Enter on a resource copies its path. Enter on a package opens its contributions.
+- Escape leaves a package or closes the panel.
+- Disabled entries remain visible. Enabled means configuration permits loading, not that initialization succeeded.
+- Temporary command-line resources and additions from `resources_discover` are not included.
 
-- "What skills do I have?" / "Where is that skill?"
-- "I installed X and nothing happened." — X may be present but disabled, or
-  configured but not installed.
-- "I edited my MCP config and nothing changed." — the server is probably defined
-  in more than one file, and a later file wins. The panel marks the winning row
-  `overrides N other definitions`.
-- "What is this package giving me?" — filter by the package name.
+Skills, extensions, prompts and themes come from pi's package resolver. Untrusted project resources are excluded. MCP means Model Context Protocol; its configuration discovery follows the third-party adapter, not built-in pi support. A configured MCP server is not proof of a connected server.
 
-## What it does not do
+## Enable or disable
 
-- **It cannot enable or disable anything.** It is read-only and never writes to
-  the pi install. Do not tell the user it can toggle things.
-- It does not report token usage. That is `/context`, which is a different
-  question — and note that extensions never appear there, because they cost no
-  tokens.
-- It does not list AGENTS.md context files, models or providers.
+The panel is read-only. Run `pi config` in a terminal to change resource filters. Tab switches between global and project settings; `pi config -l` starts with project overrides. Restart pi afterwards.
 
-## Scopes it covers
-
-`~/.pi/agent` (user), `<project>/.pi` (project), `~/.agents` (shared with other
-agent tools), and the contents of every installed package. MCP servers are also
-read from `~/.config/mcp/mcp.json`, `<project>/.mcp.json`, and — when a config
-imports them or sets `hostConfigDiscovery: "on"` — from other tools' configs
-such as Claude Code, Codex and Cursor.
+Do not claim the panel can toggle resources or detect every loading failure. For a missing entry, check the collection errors, project trust, package configuration and actual file path before suggesting a change.

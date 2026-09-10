@@ -22,10 +22,10 @@ function fakePi(): { registered: Registered[]; api: Parameters<typeof activate>[
   return { registered, api: api as unknown as Parameters<typeof activate>[0] };
 }
 
-test("activating registers both command names", () => {
+test("activating registers one canonical command", () => {
   const { registered, api } = fakePi();
   activate(api);
-  assert.deepEqual(registered.map((command) => command.name), ["pi-env", "pi-environment-monitor"]);
+  assert.deepEqual(registered.map((command) => command.name), ["pi-environment-monitor"]);
 });
 
 test("every registered command has a description and a callable handler", () => {
