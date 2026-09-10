@@ -13,7 +13,7 @@ import type { Entry, Environment, Inventory, Kind, Scope } from "../inventory.ts
 import { compareEntries } from "../inventory.ts";
 import { builtinThemes } from "./builtins.ts";
 import { FS_READERS } from "./fs-readers.ts";
-import { scanMcp } from "./mcp.ts";
+import { scanMcp, type PackageMetadata } from "./mcp.ts";
 import { displayName } from "./names.ts";
 import type { Readers } from "./readers.ts";
 
@@ -125,12 +125,14 @@ export async function collectInventory(options: CollectOptions): Promise<Invento
   const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
 
   const packageRoots: string[] = [];
+  const packageMetadata: PackageMetadata[] = [];
   const packageSources: string[] = [];
   try {
     for (const pkg of packageManager.listConfiguredPackages()) {
       const path = pkg.installedPath;
       if (path !== undefined && path !== "") {
         packageRoots.push(path);
+        packageMetadata.push({ path, scope: toScope(pkg.scope), source: pkg.source });
         packageSources.push(pkg.source);
       }
       entries.push({
@@ -160,7 +162,7 @@ export async function collectInventory(options: CollectOptions): Promise<Invento
   }
 
   try {
-    entries.push(...scanMcp({ agentDir, cwd, home, packageRoots, readers }));
+    entries.push(...scanMcp({ agentDir, cwd, home, packageRoots, packageMetadata, readers }));
   } catch (error) {
     errors.push(`mcp: ${describe(error)}`);
   }

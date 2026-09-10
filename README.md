@@ -3,6 +3,14 @@
 An inventory panel for the [pi](https://github.com/earendil-works/pi) coding agent.
 What is installed, and where does it actually live?
 
+This is an inventory of configured resources resolved from disk, not a live
+extension-health probe. Enabled means configuration permits loading; it does
+not prove an extension initialized successfully. Temporary command-line resources
+and resources added dynamically through `resources_discover` are not included.
+
+To enable or disable resources, run `pi config` in your terminal (`pi config -l`
+for project overrides), then restart pi. The inventory panel itself is read-only.
+
 ```
 ┌─ pi environment ───────────────────────────────────────────────────────────────┐
 │  Overview │ All 31 │ skill 12 │ ext 13 │ mcp 2 │ theme 4 │ prompt 0 ║ Packages │
@@ -82,7 +90,7 @@ never lose your position and never see two things claiming to be selected.
 
 ## The tabs
 
-Everything left of the divider is a thing pi loaded. `Packages` past it is the
+Everything left of the divider is a configured resource. `Packages` past it is the
 boxes those things arrived in — so `All` counts the contents rather than every
 row, and counting boxes together with their contents no longer misleads.
 
@@ -134,7 +142,7 @@ npm install --no-save --ignore-scripts typescript @types/node \
   @earendil-works/pi-coding-agent @earendil-works/pi-tui
 npm test          # node --test over tests/*.test.ts
 npx tsc --noEmit  # type check
-node scripts/scan-secrets.mjs
+node scripts/scan-secrets.mjs --git  # tracked and non-ignored candidate files
 
 node scripts/render-panel.mjs . 120 right,down,type:hud   # render any view, no terminal
 node scripts/audit.mjs                                    # cross-check against pi's own loader

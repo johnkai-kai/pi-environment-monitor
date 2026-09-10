@@ -3,3 +3,4 @@ node_modules/
 .npmrc
 *.tgz
 package-lock.json
+docs/investigation.md

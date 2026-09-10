@@ -171,6 +171,25 @@ test("a package's servers are prefixed the way pi prefixes them", () => {
   assert.equal(at(entry), `${root}/mcp.json`);
 });
 
+test("a package server keeps the package scope when metadata is supplied", () => {
+  const root = "/base/proj/.pi/packages/pi-mcp-adapter";
+  const entries = scanMcp({
+    agentDir: AGENT,
+    cwd: CWD,
+    home: HOME,
+    packageRoots: [root],
+    packageMetadata: [{ path: root, scope: "project", source: "npm:pi-mcp-adapter" }],
+    readers: makeReaders({
+      json: {
+        [`${root}/package.json`]: { name: "pi-mcp-adapter", pi: { mcp: "mcp.json" } },
+        [`${root}/mcp.json`]: { mcpServers: { inner: {} } },
+      },
+    }),
+  });
+  assert.equal(byName(entries, "pi_mcp_adapter__inner")?.scope, "project");
+  assert.equal(byName(entries, "pi_mcp_adapter__inner")?.source, "npm:pi-mcp-adapter");
+});
+
 test("nothing configured yields nothing, without throwing", () => {
   assert.deepEqual(scan({}), []);
 });

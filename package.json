@@ -1,7 +1,7 @@
 {
   "name": "pi-environment-monitor",
-  "version": "1.1.0",
-  "description": "On-demand panel listing every skill, extension, MCP server, package, theme and prompt template the pi coding agent has loaded, with its real path on disk.",
+  "version": "1.1.1",
+  "description": "On-demand inventory of configured pi skills, extensions, MCP servers, packages, themes and prompts, with their paths on disk.",
   "type": "module",
   "license": "MIT",
   "author": "johnkai-kai",
@@ -20,7 +20,7 @@
   },
   "homepage": "https://github.com/johnkai-kai/pi-environment-monitor#readme",
   "engines": {
-    "node": ">=22.6.0"
+    "node": ">=22.19.0"
   },
   "files": [
     "src",
@@ -37,7 +37,8 @@
     ]
   },
   "scripts": {
-    "test": "node --test \"tests/*.test.ts\""
+    "test": "node --test \"tests/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.84 <1",

@@ -257,6 +257,16 @@ test("every view renders without throwing, at wide and narrow widths", () => {
   }
 });
 
+test("the unframed layout clips Overview lines to a very narrow terminal", () => {
+  for (let width = 0; width < 32; width += 1) {
+    const panel = harness().panel;
+    for (let tab = 0; tab < panel.tabs.length; tab += 1) {
+      panel.activeIndex = tab;
+      for (const line of panel.render(width)) assert.ok(visibleWidth(line) <= width, JSON.stringify({ width, line }));
+    }
+  }
+});
+
 // On Overview there is no list for up and down to drive, so they step tabs instead and no
 // arrow is dead. Once you leave Overview they go back to meaning "move the cursor".
 test("up and down step through tabs on the Overview page", () => {

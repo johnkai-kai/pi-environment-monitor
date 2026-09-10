@@ -46,8 +46,13 @@ function plural(count: number, noun: string): string {
 export function shortenPath(path: string, home: string): string {
   const slash = (value: string): string => value.replace(/\\/g, "/");
   const p = slash(path);
-  const h = slash(home);
-  if (h !== "" && p.toLowerCase().startsWith(h.toLowerCase())) return `~${p.slice(h.length)}`;
+  const rawHome = slash(home);
+  const h = rawHome.length > 1 ? rawHome.replace(/\/+$/, "") : rawHome;
+  const lowerPath = p.toLowerCase();
+  const lowerHome = h.toLowerCase();
+  if (h !== "" && (lowerPath === lowerHome || lowerPath.startsWith(`${lowerHome}/`))) {
+    return `~${p.slice(h.length)}`;
+  }
   return p;
 }
 

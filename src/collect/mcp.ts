@@ -134,7 +134,19 @@ function entry(name: string, path: string, scope: Scope, source: string, enabled
   return { kind: "mcp", name, path, scope, origin: source === "local" ? "top-level" : "package", source, enabled };
 }
 
-function packageServers(roots: readonly string[], readers: Readers, out: Entry[]): void {
+export interface PackageMetadata {
+  path: string;
+  scope: Scope;
+  source?: string;
+}
+
+function packageServers(
+  roots: readonly string[],
+  readers: Readers,
+  out: Entry[],
+  metadata: readonly PackageMetadata[] = [],
+): void {
+  const metadataByRoot = new Map(metadata.map((item) => [item.path, item]));
   for (const root of roots) {
     safe(() => {
       const manifest = readers.readJson(join(root, "package.json"));
@@ -152,7 +164,8 @@ function packageServers(roots: readonly string[], readers: Readers, out: Entry[]
         const path = join(root, rel);
         safe(() => {
           for (const server of serverNames(readers.readJson(path))) {
-            out.push(entry(prefix + server, path, "user", packageName, true));
+            const meta = metadataByRoot.get(root);
+            out.push(entry(prefix + server, path, meta?.scope ?? "user", meta?.source ?? packageName, true));
           }
         }, undefined);
       }
@@ -165,6 +178,8 @@ export interface McpScanInput {
   cwd: string;
   home: string;
   packageRoots: readonly string[];
+  /** Optional scope metadata for packageRoots; omitted roots retain legacy user scope. */
+  packageMetadata?: readonly PackageMetadata[];
   readers: Readers;
 }
 
@@ -175,7 +190,7 @@ export interface McpScanInput {
  * the reported path is where the winning definition lives.
  */
 export function scanMcp(input: McpScanInput): Entry[] {
-  const { agentDir, cwd, home, packageRoots, readers } = input;
+  const { agentDir, cwd, home, packageRoots, packageMetadata, readers } = input;
   const byName = new Map<string, Entry>();
 
   /** Adds a server only if the name is free. Used for sources that cannot override a config. */
@@ -234,7 +249,7 @@ export function scanMcp(input: McpScanInput): Entry[] {
   }
 
   const fromPackages: Entry[] = [];
-  safe(() => packageServers(packageRoots, readers, fromPackages), undefined);
+  safe(() => packageServers(packageRoots, readers, fromPackages, packageMetadata), undefined);
   for (const candidate of fromPackages) push(candidate);
 
   return [...byName.values()];

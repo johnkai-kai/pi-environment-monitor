@@ -287,11 +287,11 @@ export class Panel {
     if (!canFrame(width)) {
       // Too narrow to spend four columns on a border. Fall back to the flat layout rather than
       // draw a box with nothing left inside it.
-      const rule = skin.dim(`  ${RULE.repeat(Math.max(10, Math.min(width - 4, 70)))}`);
+      const rule = clip(skin.dim(`  ${RULE.repeat(Math.max(0, Math.min(width - 2, 70)))}`), width);
       const flat: string[] = [];
       for (const [index, section] of this.sections(width).entries()) {
         if (index > 0) flat.push("", rule, "");
-        flat.push(...section);
+        flat.push(...section.map((line) => clip(line, width)));
       }
       flat.push("", hint);
       while (flat.length < PANEL_HEIGHT) flat.push("");

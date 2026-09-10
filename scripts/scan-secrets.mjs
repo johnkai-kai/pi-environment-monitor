@@ -1,8 +1,9 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const PATTERNS = [
-  { name: "email", re: /[\w.+-]+@[\w-]+\.[\w.]+/ },
+  { name: "email", re: /[\w.+-]+@(?:[\w-]+\.)+[A-Za-z]{2,}\b/ },
   { name: "windows-path", re: /[A-Za-z]:\\Users\\/ },
   { name: "home-path", re: /\/(?:home|Users)\/[A-Za-z0-9_-]+\// },
   { name: "api-key", re: /(sk-|gho_|ghp_|AKIA)[A-Za-z0-9_-]{8,}/ },
@@ -29,7 +30,12 @@ function walk(dir, out = []) {
 }
 
 const findings = [];
-for (const file of walk(process.cwd())) {
+// --git checks the files that could be committed; the default still audits all local files.
+const files = process.argv.includes("--git")
+  ? execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { encoding: "utf-8" })
+      .split("\0").filter((file) => file && !SKIP_FILES.has(file.split("/").at(-1)))
+  : walk(process.cwd());
+for (const file of files) {
   let text;
   try {
     text = readFileSync(file, "utf-8");

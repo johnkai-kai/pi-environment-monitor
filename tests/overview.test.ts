@@ -131,6 +131,8 @@ test("the home prefix shortens for display only", () => {
   assert.equal(shortenPath("C:\\Users\\u\\.pi\\x", "C:\\Users\\u"), "~/.pi/x");
   assert.equal(shortenPath("/elsewhere/x", "/base/u"), "/elsewhere/x");
   assert.equal(shortenPath("/base/u/x", ""), "/base/u/x");
+  assert.equal(shortenPath("/base/user2/x", "/base/user"), "/base/user2/x");
+  assert.equal(shortenPath("C:\\Profiles\\u2\\x", "C:\\Profiles\\u"), "C:/Profiles/u2/x");
 });
 
 test("an empty inventory renders without throwing", () => {
