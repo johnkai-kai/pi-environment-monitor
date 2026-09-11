@@ -1,4 +1,5 @@
 import { KINDS, type Entry, type Inventory } from "./inventory.ts";
+import { iconForKind } from "./icons.ts";
 import { sanitizeText } from "./sanitize.ts";
 import type { Skin } from "./skin.ts";
 import { isContentEntry } from "./tabs.ts";
@@ -65,7 +66,7 @@ function headline(inventory: Inventory, skin: Skin): string[] {
   const standalone = installed - insidePackages;
 
   const lines = [
-    `  ${skin.bold(skin.text(plural(packages.length, "package")))}${skin.muted("  +  ")}${skin.bold(skin.text(String(installed)))}${skin.muted(" things installed")}`,
+    `  ${skin.bold(skin.accent(String(packages.length)))}${skin.muted(` package${packages.length === 1 ? "" : "s"}  +  `)}${skin.bold(skin.accent(String(installed)))}${skin.muted(" things installed")}`,
     // The two clauses have to add up to the line above them, so built-ins — which nobody
     // installed — get their own line rather than a third clause that breaks the sum.
     skin.muted(`  ${insidePackages} came inside a package · ${standalone} standalone`),
@@ -97,8 +98,9 @@ function countsBlock(entries: readonly Entry[], skin: Skin): string[] {
     ].filter((part) => part !== "");
     const detail = parts.length === 0 ? skin.dim("none installed") : skin.muted(parts.join("").trimEnd());
     // Counts are right-aligned so the column reads as a column, not as ragged prose.
-    const count = list.length === 0 ? skin.dim(padStart("0", COUNT_WIDTH)) : skin.text(padStart(String(list.length), COUNT_WIDTH));
-    lines.push(`  ${skin.dim(padTo(kind, KIND_WIDTH))}${count}   ${detail}`);
+    const count = list.length === 0 ? skin.dim(padStart("0", COUNT_WIDTH)) : skin.accent(padStart(String(list.length), COUNT_WIDTH));
+    const kindLabel = `${iconForKind(kind)} ${kind}`;
+    lines.push(`  ${skin.muted(padTo(kindLabel, KIND_WIDTH))}${count}   ${detail}`);
   }
   return lines;
 }
@@ -173,6 +175,10 @@ export function healthEntries(inventory: Inventory): HealthLine[] {
 const FINE_MARK = "·";
 const ATTENTION_MARK = "!";
 
+function sectionHeading(icon: string, title: string, skin: Skin): string {
+  return `  ${skin.accent(icon)} ${skin.bold(skin.text(title))}`;
+}
+
 function healthBlock(inventory: Inventory, width: number, skin: Skin): string[] {
   const lines: string[] = [];
   for (const item of healthEntries(inventory)) {
@@ -220,9 +226,9 @@ export function overviewSections(inventory: Inventory, width: number, home: stri
     },
   };
   return [
-    ["", ...headline(inventory, skin), "", ...countsBlock(inventory.entries, skin)],
-    healthBlock(inventory, width, skin),
-    whereBlock(withHome, width, skin),
+    [sectionHeading("◆", "Inventory", skin), "", ...headline(inventory, skin), "", ...countsBlock(inventory.entries, skin)],
+    [sectionHeading("◇", "Status", skin), "", ...healthBlock(inventory, width, skin)],
+    [sectionHeading("⌁", "Locations", skin), "", ...whereBlock(withHome, width, skin)],
   ];
 }
 

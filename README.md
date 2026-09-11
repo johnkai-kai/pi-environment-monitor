@@ -12,8 +12,8 @@ To enable or disable resources, run `pi config` in your terminal (`pi config -l`
 for project overrides), then restart pi. The inventory panel itself is read-only.
 
 ```
-┌─ pi environment ───────────────────────────────────────────────────────────────┐
-│  Overview │ All 31 │ skill 12 │ ext 13 │ mcp 2 │ theme 4 │ prompt 0 ║ Packages │
+┌─ ◈ pi environment ─────────────────────────────────────────────────────────────┐
+│ ‹ ≡ All 31 ›  (2/8)                                                            │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │   search  hud█                                                         2 of 12 │
 │                                                                                │

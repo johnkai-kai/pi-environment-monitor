@@ -138,3 +138,12 @@ test("the home prefix shortens for display only", () => {
 test("an empty inventory renders without throwing", () => {
   assert.ok(overviewLines(inventory([]), 80, "", plainSkin()).length > 0);
 });
+
+test("the overview uses restrained headings and kind icons", () => {
+  const out = text(inventory(BASE));
+  assert.match(out, /◆ Inventory/);
+  assert.match(out, /◇ Status/);
+  assert.match(out, /⌁ Locations/);
+  assert.match(out, /◆ skill/);
+  assert.match(out, /◇ extension/);
+});

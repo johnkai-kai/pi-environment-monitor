@@ -81,10 +81,19 @@ test("the kind column shows on All and nowhere else — elsewhere it repeats one
 
 test("the strip marks the active tab with brackets, not colour alone", () => {
   const bar = renderTabBar(buildTabs(SAMPLE), 2, 200, { skin: plainSkin(), focused: true, plain: true });
-  assert.match(bar, /\[skill 2\]/);
+  assert.match(bar, /\[◆ skill 2\]/);
   assert.match(bar, /Overview/);
+  assert.ok(!bar.includes("◈ Overview"), "inactive tabs stay quiet");
   // Packages sits past a heavier divider because it is a different layer.
   assert.match(bar, /║ {1,2}Packages/);
+});
+
+test("the active tab alone carries a small identifying icon", () => {
+  const tabs = buildTabs(SAMPLE);
+  const overview = renderTabBar(tabs, 0, 200, { skin: plainSkin(), focused: true, plain: true });
+  const packages = renderTabBar(tabs, tabs.length - 1, 200, { skin: plainSkin(), focused: true, plain: true });
+  assert.match(overview, /\[◈ Overview\]/);
+  assert.match(packages, /\[□ Packages 2\]/);
 });
 
 test("a strip too wide for the terminal degrades to naming where you are", () => {

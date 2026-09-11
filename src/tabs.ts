@@ -1,4 +1,5 @@
 import { KINDS, type Entry, type Kind } from "./inventory.ts";
+import { iconForTab } from "./icons.ts";
 import type { Skin } from "./skin.ts";
 import { visibleWidth } from "./width.ts";
 
@@ -76,8 +77,9 @@ export function tabShowsKindColumn(tab: Tab): boolean {
   return tab.id === "all";
 }
 
-function tabText(tab: Tab): string {
-  return tab.count === null ? tab.label : `${tab.label} ${tab.count}`;
+function tabText(tab: Tab, withIcon = false): string {
+  const label = withIcon ? `${iconForTab(tab.id)} ${tab.label}` : tab.label;
+  return tab.count === null ? label : `${label} ${tab.count}`;
 }
 
 const SEP = "│";
@@ -113,7 +115,7 @@ export function renderTabBar(
   // selectedBg, an accent marker and bold text while it holds the cursor, the fill alone once
   // the cursor has moved down into the list. One vocabulary, two places.
   const cell = (tab: Tab, index: number): string => {
-    const text = tabText(tab);
+    const text = tabText(tab, index === activeIndex);
     if (index !== activeIndex) return skin.muted(` ${text} `);
     if (options.plain === true) return `[${text}]`;
     return focused
@@ -129,8 +131,9 @@ export function renderTabBar(
   if (visibleWidth(full) <= width) return full;
 
   // Too narrow for the strip: name where you are and that there is more either side.
-  const label = `‹ ${tabText(active)} ›  (${activeIndex + 1}/${tabs.length})`;
-  if (visibleWidth(label) > width) return tabText(active).slice(0, Math.max(0, width));
+  const activeText = tabText(active, true);
+  const label = `‹ ${activeText} ›  (${activeIndex + 1}/${tabs.length})`;
+  if (visibleWidth(label) > width) return activeText.slice(0, Math.max(0, width));
   if (options.plain === true) return label;
   return focused ? skin.fill(skin.bold(skin.text(label))) : skin.fill(skin.muted(label));
 }

@@ -39,7 +39,7 @@ const LIST_HEIGHT = 2 + 2 + VISIBLE_ROWS + 1 + 1 + 1 + DETAIL_LINES + 2;
 const PANEL_HEIGHT = Math.max(LIST_HEIGHT, 28);
 const PRINTABLE = /^[\x20-\x7e]$/;
 const RULE = "─";
-const TITLE = "pi environment";
+const TITLE = "◈ pi environment";
 
 /** Which half of the panel holds the cursor. */
 export type Focus = "tabs" | "list";
